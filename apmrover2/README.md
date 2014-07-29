@@ -5,3 +5,7 @@ ArduPlane by Jean-Louis Naudin (JLN), and then rewritten after the `AP_HAL` merg
 
 `APMRover2` provides an autopilot for rovers.This allows rovers to follow an
  autonomous recognition mission following a navigation plan.
+
+This section will introduce `APMrover2` the rover flavour of ArduPilot.
+
+You can find the completo code in [this repository](https://github.com/BeaglePilot/ardupilot/tree/master/APMrover2).
