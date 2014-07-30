@@ -214,7 +214,7 @@ You can see the implementation of this constructor in [AP_Param.h](https://githu
 static const AP_InertialSensor::Sample_rate ins_sample_rate = AP_InertialSensor::RATE_50HZ;
 ...
 ```
-The [AP_InertialSensor](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/AP_InertialSensor/AP_InertialSensor.h) is an abstraction for gyro and accelerometer measurements which are correctly aligned to the body axes and scaled to SI units.In the `AP_InertialSensor.h` code we find the `Sample_rate` defintion.
+The [AP_InertialSensor](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/AP_InertialSensor) is an abstraction for gyro and accelerometer measurements which are correctly aligned to the body axes and scaled to SI units.In the `AP_InertialSensor.h` code we find the `Sample_rate` defintion.
 ```
  // the rate that updates will be available to the application
     enum Sample_rate {
@@ -347,7 +347,9 @@ static AP_Compass_HIL compass;
 #endif
 ...
 ```
-Defines the compass using  [AP_Compass.h](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/AP_Compass/AP_Compass.h#L6) which catchs-all header that defines all supported compass classes.
+Defines the compass using  [AP_Compass.h](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/AP_Compass/AP_Compass.h#L6) which catchs-all header that defines all supported compass classes.Also includes HIL methods.
+
+**Note** about **HIL**: Simulation Hardware-in-the-loop (HIL) is a technique used for the development and testing of embedded real-time systems complex.
 
 ```cpp
 ...
@@ -396,6 +398,7 @@ AP_AHRS_DCM ahrs(ins, barometer, gps);
 ```
 Defines the [AP_AHRS](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/AP_AHRS/AP_AHRS.h) values for AHRS (Attitude Heading Reference System) interface for ArduPilot.
 
+
 ```cpp
 ...
 
@@ -438,7 +441,7 @@ SITL sitl;
 ...
 ```
 
-Defines [AP_Mission](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/AP_Mission/AP_Mission.h) methods. `AP_Mission` library performances are:
+Defines [AP_Mission](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/AP_Mission) methods. `AP_Mission` library performances are:
 
 - responsible for managing a list of commands made up of "nav", "do" and "conditional" commands.
 
@@ -555,7 +558,7 @@ static int16_t rc_override[8] = {0,0,0,0,0,0,0,0};
 static bool rc_override_active = false;
 ...
 ```
- Here the radio- control parameters are initialised.
+ Here the radio- control parameters are initialized.
 
 ```cpp
 ////////////////////////////////////////////////////////////////////////////////
@@ -640,7 +643,7 @@ static float 	ground_speed = 0;
 static int16_t throttle_last = 0, throttle = 500;
 ...
 ```
-The gound speed and the throttle variables definition, for later, be able t control them.
+The `ground_speed` and the `throttle` variables definition, for later, be able t control them.
 
 ```cpp
 
@@ -808,7 +811,165 @@ void setup() {
 }
 ...
 ```
-This is the first funtion to be called.Init the battery and the scheduler.
+This is the first funtion to be called.
+Init the battery and the scheduler.Also, stablish a channel for Analog inputs.
 
+```cpp
+/*
+  loop() is called rapidly while the sketch is running
+ */
+void loop()
+{
+    // wait for an INS sample
+    if (!ins.wait_for_sample(1000)) {
+        return;
+    }
+    uint32_t timer = hal.scheduler->micros();
+
+    delta_us_fast_loop	= timer - fast_loopTimer_us;
+    G_Dt                = delta_us_fast_loop * 1.0e-6f;
+    fast_loopTimer_us   = timer;
+
+	if (delta_us_fast_loop > G_Dt_max)
+		G_Dt_max = delta_us_fast_loop;
+
+    mainLoop_count++;
+
+    // tell the scheduler one tick has passed
+    scheduler.tick();
+
+    scheduler.run(19500U);
+}
+...
 ```
 
+This `loop()` calls the main loop scheduler for APM contained is [AP_scheduler](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/AP_Scheduler/AP_Scheduler.h).
+
+Remarkable functions called do the following:
+
+- `micros()` belong to [AP_HAL/Scheduler](https://github.com/diydrones/ardupilot/blob/master/libraries/AP_HAL/Scheduler.h) which change units from mili to micro.
+
+
+- `tick()` is called when one tick has passed.
+
+
+- `run()` run the tasks. Call this once per 'tick'.
+
+
+```cpp
+// update AHRS system
+static void ahrs_update()
+{
+    ahrs.set_armed(hal.util->safety_switch_state() != AP_HAL::Util::SAFETY_DISARMED);
+
+#if HIL_MODE != HIL_MODE_DISABLED
+    // update hil before AHRS update
+    gcs_update();
+#endif
+
+    // when in reverse we need to tell AHRS not to assume we are a
+    // 'fly forward' vehicle, otherwise it will see a large
+    // discrepancy between the mag and the GPS heading and will try to
+    // correct for it, leading to a large yaw error
+    ahrs.set_fly_forward(!in_reverse);
+
+    ahrs.update();
+
+    // if using the EKF get a speed update now (from accelerometers)
+    Vector3f velocity;
+    if (ahrs.get_velocity_NED(velocity)) {
+        ground_speed = pythagorous2(velocity.x, velocity.y);
+    }
+
+    if (should_log(MASK_LOG_ATTITUDE_FAST))
+        Log_Write_Attitude();
+
+    if (should_log(MASK_LOG_IMU))
+        DataFlash.Log_Write_IMU(ins);
+}
+...
+```
+
+
+For updating AHRS system methods from [AP_AHRS](https://github.com/BeaglePilot/ardupilot/tree/master/libraries/AP_AHRS) are called. In `AP_AHRS.h` you can find the definitions and in `AP_AHRS.cpp` the impplementations of these methods.Here are some notes about the methods:
+
+-    `virtual bool get_relative_position_NED(Vector3f &vec) const { return false; }` returns a position relative to home in meters, North/East/Down
+order. This will only be accurate if `have_inertial_nav()` is true.
+```cpp
+// if using the EKF get a speed update now (from accelerometers)
+    Vector3f velocity;
+    if (ahrs.get_velocity_NED(velocity)) {
+        ground_speed = pythagorous2(velocity.x, velocity.y);
+    }
+    ```
+
+
+- `void set_armed(bool setting) {_flags.armed = setting;}` sets the armed flag allows EKF enter static mode when disarmed.
+```cpp
+shrs.set_armed(hal.util->safety_switch_state() != AP_HAL::Util::SAFETY_DISARMED);
+```
+
+
+` Log_Write_IMU`is a logging method common to all vehicles, exported from [DataFlash](https://github.com/diydrones/ardupilot/blob/master/libraries/DataFlash/DataFlash.h#L52) library.
+
+```cpp
+/*
+  update camera mount - 50Hz
+ */
+static void mount_update(void)
+{
+#if MOUNT == ENABLED
+	camera_mount.update_mount_position();
+#endif
+#if CAMERA == ENABLED
+    camera.trigger_pic_cleanup();
+#endif
+}
+
+static void update_alt()
+{
+    barometer.read();
+    if (should_log(MASK_LOG_IMU)) {
+        Log_Write_Baro();
+    }
+}
+...
+```
+This slice of code checks if the CAMERA and the MOUNT are enabled and then call [AP_CAMERA](https://github.com/BeaglePilot/ardupilot/tree/master/libraries/AP_Camera) AND [AP_MOUNT](https://github.com/diydrones/ardupilot/tree/master/libraries/AP_Mount) methods.
+
+- ` update_mount_position();` should be called periodically, for knowing the actual position of the camera mount.
+
+
+- `   trigger_pic_cleanup();`
+de-activate the trigger after some delay, but without using a `delay()` function should be called at 50hz from main program.
+
+
+- Also calls `barometer.read()`  for reading the `AP_Baro`class `barometer`variable.
+
+
+```cpp
+/*
+  check for GCS failsafe - 10Hz
+ */
+static void gcs_failsafe_check(void)
+{
+	if (g.fs_gcs_enabled) {
+        failsafe_trigger(FAILSAFE_EVENT_GCS, last_heartbeat_ms != 0 && (millis() - last_heartbeat_ms) > 2000);
+    }
+}
+...
+```
+Check if there is a failsafe.
+
+```cpp
+/*
+  if the compass is enabled then try to accumulate a reading
+ */
+static void compass_accumulate(void)
+{
+    if (g.compass_enabled) {
+        compass.accumulate();
+    }
+}
+...
+```
