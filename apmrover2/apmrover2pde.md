@@ -973,3 +973,145 @@ static void compass_accumulate(void)
 }
 ...
 ```
+
+The compass method are called to accumulate reading. `acucumulate` method uses spare CPU cycles to accumulate values from the compass if possible.You can find the implementeation of this method  [here](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/AP_Compass/Compass.h#L99).
+```cpp
+
+/*
+  check for new compass data - 10Hz
+ */
+static void update_compass(void)
+{
+    if (g.compass_enabled && compass.read()) {
+        ahrs.set_compass(&compass);
+        // update offsets
+        compass.learn_offsets();
+        if (should_log(MASK_LOG_COMPASS)) {
+            Log_Write_Compass();
+        }
+    } else {
+        ahrs.set_compass(NULL);
+    }
+}
+...
+```
+Compass methods are used to check for new compass data.`void learn_offsets(void);` performs automatic offset updates.
+
+```cpp
+/*
+  log some key data - 10Hz
+ */
+static void update_logging1(void)
+{
+    if (should_log(MASK_LOG_ATTITUDE_MED) && !should_log(MASK_LOG_ATTITUDE_FAST))
+        Log_Write_Attitude();
+
+    if (should_log(MASK_LOG_CTUN))
+        Log_Write_Control_Tuning();
+
+    if (should_log(MASK_LOG_NTUN))
+        Log_Write_Nav_Tuning();
+}
+
+/*
+  log some key data - 10Hz
+ */
+static void update_logging2(void)
+{
+    if (should_log(MASK_LOG_STEERING)) {
+        if (control_mode == STEERING || control_mode == AUTO || control_mode == RTL || control_mode == GUIDED) {
+            Log_Write_Steering();
+        }
+    }
+
+    if (should_log(MASK_LOG_RC))
+        Log_Write_RC();
+}
+
+...
+```
+Here the `control_mode`and the `mask` are set up.
+
+```cpp
+
+/*
+  update aux servo mappings
+ */
+static void update_aux(void)
+{
+    RC_Channel_aux::enable_aux_servos();
+
+#if MOUNT == ENABLED
+    camera_mount.update_mount_type();
+#endif
+}
+...
+```
+This function updates the servomechanism type through `update_mount_type()` which auto-detect the mount gimbal type depending on the functions assigned .
+
+```cpp
+/*
+  once a second events
+ */
+static void one_second_loop(void)
+{
+	if (should_log(MASK_LOG_CURRENT))
+		Log_Write_Current();
+	// send a heartbeat
+	gcs_send_message(MSG_HEARTBEAT);
+
+    // allow orientation change at runtime to aid config
+    ahrs.set_orientation();
+
+    set_control_channels();
+
+    // cope with changes to aux functions
+    update_aux();
+
+#if MOUNT == ENABLED
+    camera_mount.update_mount_type();
+#endif
+
+    // cope with changes to mavlink system ID
+    mavlink_system.sysid = g.sysid_this_mav;
+
+    static uint8_t counter;
+
+    counter++;
+
+    // write perf data every 20s
+    if (counter % 10 == 0) {
+        if (scheduler.debug() != 0) {
+            hal.console->printf_P(PSTR("G_Dt_max=%lu\n"), (unsigned long)G_Dt_max);
+        }
+        if (should_log(MASK_LOG_PM))
+            Log_Write_Performance();
+        G_Dt_max = 0;
+        resetPerfData();
+    }
+
+    // save compass offsets once a minute
+    if (counter >= 60) {
+        if (g.compass_enabled) {
+            compass.save_offsets();
+        }
+        counter = 0;
+    }
+}
+
+static void update_GPS_50Hz(void)
+{
+    static uint32_t last_gps_reading[GPS_MAX_INSTANCES];
+	gps.update();
+
+    for (uint8_t i=0; i<gps.num_sensors(); i++) {
+        if (gps.last_message_time_ms(i) != last_gps_reading[i]) {
+            last_gps_reading[i] = gps.last_message_time_ms(i);
+            if (should_log(MASK_LOG_GPS)) {
+                DataFlash.Log_Write_GPS(gps, i, current_loc.alt);
+            }
+        }
+    }
+}
+...
+```
