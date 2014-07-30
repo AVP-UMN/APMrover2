@@ -96,7 +96,7 @@ the user, and passes the arguments to those commands to a function defined as ha
 
 #include <AP_AHRS.h>         // ArduPilot Mega DCM Library
 
-#include <AP_NavEKF.h>  //Altitude and position estimation.
+#include <AP_NavEKF.h>  //Attitude and position estimation.
 
 #include <AP_Mission.h>     // Mission command library
 
@@ -214,7 +214,7 @@ You can see the implementation of this constructor in [AP_Param.h](https://githu
 static const AP_InertialSensor::Sample_rate ins_sample_rate = AP_InertialSensor::RATE_50HZ;
 ...
 ```
-The [AP_InertialSensor](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/AP_InertialSensor/AP_InertialSensor.h) is an abstraction for gyro and accel measurements which are correctly aligned to the body axes and scaled to SI units.In the `AP_InertialSensor.h` code we find the `Sample_rate` defintion.
+The [AP_InertialSensor](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/AP_InertialSensor/AP_InertialSensor.h) is an abstraction for gyro and accelerometer measurements which are correctly aligned to the body axes and scaled to SI units.In the `AP_InertialSensor.h` code we find the `Sample_rate` defintion.
 ```
  // the rate that updates will be available to the application
     enum Sample_rate {
@@ -330,7 +330,7 @@ static AP_Baro_MS5611 barometer(&AP_Baro_MS5611::spi);
 #endif
 ...
 ```
-The barometer defined at [AP_baro.h](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/AP_Baro/AP_Baro.h#L93) is configured according to the barometer type.
+The barometer defined at [AP_Baro.h](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/AP_Baro/AP_Baro.h#L93) is configured according to the barometer type.Notice that a barometer measures atmospheric pressure.
 
 ```cpp
 ...
@@ -455,4 +455,178 @@ Defines [AP_Mission](https://github.com/BeaglePilot/ardupilot/blob/master/librar
 - accounts for the `DO_JUMP` command.
 
 ```cpp
-https://github.com/BeaglePilot/ardupilot/blob/master/APMrover2/APMrover2.pde#L280
+
+
+////////////////////////////////////////////////////////////////////////////////
+// GCS selection
+////////////////////////////////////////////////////////////////////////////////
+//
+static const uint8_t num_gcs = MAVLINK_COMM_NUM_BUFFERS;
+static GCS_MAVLINK gcs[MAVLINK_COMM_NUM_BUFFERS];
+
+// a pin for reading the receiver RSSI voltage. The scaling by 0.25
+// is to take the 0 to 1024 range down to an 8 bit range for MAVLink
+AP_HAL::AnalogSource *rssi_analog_source;
+...
+```
+
+`MAVLinks`presents a communication protocol for MAV (Micro Aerial Vehicles). [GCS.h](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/GCS_MAVLink/GCS.h) stablish how message are sent to Ground Control Station (GCS) using MAVLink protocol.
+
+```cpp
+////////////////////////////////////////////////////////////////////////////////
+// SONAR
+static RangeFinder sonar;
+
+// relay support
+AP_Relay relay;
+
+AP_ServoRelayEvents ServoRelayEvents(relay);
+
+// Camera
+#if CAMERA == ENABLED
+static AP_Camera camera(&relay);
+#endif
+
+// The rover's current location
+static struct 	Location current_loc;
+
+
+// Camera/Antenna mount tracking and stabilisation stuff
+// --------------------------------------
+#if MOUNT == ENABLED
+// current_loc uses the baro/gps soloution for altitude rather than gps only.
+AP_Mount camera_mount(&current_loc, ahrs, 0);
+#endif
+...
+```
+Un this slice of code `AP_Relay`and `AP_ServoRelayEvents` appear:
+
+- [AP_Relay.h](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/AP_Relay/AP_Relay.h) provides a APM relay control class.
+
+
+- [AP_ServoRElayEvents](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/AP_ServoRelayEvents/AP_ServoRelayEvents.h) handles some commands for servo controllling.
+
+The **camera is activated** calling an `AP_Camera`class constructor. [AP_Camera.h](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/AP_Camera/AP_Camera.h)
+is a photo or video camera manager, with EEPROM-backed storage of constants.
+
+As the camera is enabled, also the **mount must be enabled**.[AP_Mount](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/AP_Mount/AP_Mount.h) moves a 2 or 3 axis mount attached to vehicle.Its main use is for mount to track targets or stabilise camera plus other modes.
+
+```cpp
+
+////////////////////////////////////////////////////////////////////////////////
+// Global variables
+////////////////////////////////////////////////////////////////////////////////
+
+// if USB is connected
+static bool usb_connected;
+
+/* Radio values
+		Channel assignments
+			1   Steering
+			2   ---
+			3   Throttle
+			4   ---
+			5   Aux5
+			6   Aux6
+			7   Aux7/learn
+			8   Aux8/Mode
+		Each Aux channel can be configured to have any of the available auxiliary functions assigned to it.
+		See libraries/RC_Channel/RC_Channel_aux.h for more information
+*/
+...
+```
+
+This slice of code indicates the state/use of the channels  in case the USB is connected.
+
+```cpp
+////////////////////////////////////////////////////////////////////////////////
+// Radio
+////////////////////////////////////////////////////////////////////////////////
+// This is the state of the flight control system
+// There are multiple states defined such as MANUAL, FBW-A, AUTO
+enum mode   control_mode        = INITIALISING;
+// Used to maintain the state of the previous control switch position
+// This is set to -1 when we need to re-read the switch
+uint8_t 	oldSwitchPosition;
+// These are values received from the GCS if the user is using GCS joystick
+// control and are substituted for the values coming from the RC radio
+static int16_t rc_override[8] = {0,0,0,0,0,0,0,0};
+// A flag if GCS joystick control is in use
+static bool rc_override_active = false;
+...
+```
+ Here the radio- control parameters are initialised.
+
+```cpp
+////////////////////////////////////////////////////////////////////////////////
+// Failsafe
+////////////////////////////////////////////////////////////////////////////////
+// A tracking variable for type of failsafe active
+// Used for failsafe based on loss of RC signal or GCS signal. See
+// FAILSAFE_EVENT_*
+static struct {
+    uint8_t bits;
+    uint32_t rc_override_timer;
+    uint32_t start_time;
+    uint8_t triggered;
+    uint32_t last_valid_rc_ms;
+} failsafe;
+
+// notification object for LEDs, buzzers etc (parameter set to false disables external leds)
+static AP_Notify notify;
+
+// A counter used to count down valid gps fixes to allow the gps estimate to settle
+// before recording our home position (and executing a ground start if we booted with an air start)
+static uint8_t 	ground_start_count	= 20;
+...
+```
+A **fail-safe** or fail-secure device is one that, in the event of failure, responds in a way that will cause no harm, or at least a minimum of harm, to other devices or danger to personnel.In this slice of code a failsafe is defined.
+
+[AP_Notify](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/AP_Notify/AP_Notify.h) stablishes the notify flags for LEds, buzzers, alarms...
+
+```cpp
+
+////////////////////////////////////////////////////////////////////////////////
+// Location & Navigation
+////////////////////////////////////////////////////////////////////////////////
+// Constants
+const	float radius_of_earth 	= 6378100;	// meters
+
+
+// true if we have a position estimate from AHRS
+static bool have_position;
+
+static bool rtl_complete = false;
+
+
+// angle of our next navigation waypoint
+static int32_t next_navigation_leg_cd;
+
+// ground speed error in m/s
+static float	groundspeed_error;
+// 0-(throttle_max - throttle_cruise) : throttle nudge in Auto mode using top 1/2 of throttle stick travel
+static int16_t     throttle_nudge = 0;
+
+// receiver RSSI
+static uint8_t receiver_rssi;
+
+// the time when the last HEARTBEAT message arrived from a GCS
+static uint32_t last_heartbeat_ms;
+
+// obstacle detection information
+static struct {
+    // have we detected an obstacle?
+    uint8_t detected_count;
+    float turn_angle;
+    uint16_t sonar1_distance_cm;
+    uint16_t sonar2_distance_cm;
+
+    // time when we last detected an obstacle, in milliseconds
+    uint32_t detected_time_ms;
+} obstacle;
+
+// this is set to true when auto has been triggered to start
+static bool auto_triggered;
+...
+```
+Here are declared the varibles for controlling the location and the route the rover is following.This code content is, is resume, some definitions for **control variables**.
