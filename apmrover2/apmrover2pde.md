@@ -1099,6 +1099,15 @@ static void one_second_loop(void)
     }
 }
 
+...
+```
+Here are included some methods that should be repeated often. They are inside loops with the specific rerun time.
+
+For example: the mount type, compass offsets or de gps.
+
+
+```cpp
+
 static void update_GPS_50Hz(void)
 {
     static uint32_t last_gps_reading[GPS_MAX_INSTANCES];
@@ -1115,3 +1124,185 @@ static void update_GPS_50Hz(void)
 }
 ...
 ```
+This code updated the first GPS.
+
+Here [AP_GPS](https://github.com/diydrones/ardupilot/tree/master/libraries/AP_GPS) methods are called to update the gps.
+
+`num_sensors`returns number of active GPS sensors(Note that if the first GPS is not present but the 2nd is then we return 2).The `last_message_time_ms` is the time we last processed a message in milliseconds. This is used to indicate that we have new GPS data to process.Then the `DataFlash`loggin method `Log_Write_GPS`is called.
+
+```cpp
+
+static void update_GPS_10Hz(void)
+{
+    have_position = ahrs.get_position(current_loc);
+
+	if (have_position && gps.status() >= AP_GPS::GPS_OK_FIX_3D) {
+
+		if (ground_start_count > 1){
+			ground_start_count--;
+
+		} else if (ground_start_count == 1) {
+			// We countdown N number of good GPS fixes
+			// so that the altitude is more accurate
+			// -------------------------------------
+			if (current_loc.lat == 0) {
+				ground_start_count = 20;
+			} else {
+                init_home();
+
+                // set system clock for log timestamps
+                hal.util->set_system_clock(gps.time_epoch_usec());
+
+				if (g.compass_enabled) {
+					// Set compass declination automatically
+					compass.set_initial_location(gps.location().lat, gps.location().lng);
+				}
+				ground_start_count = 0;
+			}
+		}
+        Vector3f velocity;
+        if (ahrs.get_velocity_NED(velocity)) {
+            ground_speed = pythagorous2(velocity.x, velocity.y);
+        } else {
+            ground_speed   = gps.ground_speed();
+        }
+
+#if CAMERA == ENABLED
+        if (camera.update_location(current_loc) == true) {
+            do_take_picture();
+        }
+#endif
+	}
+}
+...
+```
+This codes updates the second GPS.
+
+First, `get_position` gets our current position estimate. Return true if a position is available, otherwise false.
+
+Then,`gps.status()` shows query GPS status.
+The initial location is set with the read get from the gps readings. The ground speedis set in m/s.
+
+If the camera is enabled update_location` updates the location of vehicle and returns true if a picture should be taken.
+
+
+```cpp
+...
+
+
+static void update_current_mode(void)
+{
+    switch (control_mode){
+    case AUTO:
+    case RTL:
+    case GUIDED:
+        set_reverse(false);
+        calc_lateral_acceleration();
+        calc_nav_steer();
+        calc_throttle(g.speed_cruise);
+        break;
+...
+```
+**STEERING**: Lateral acceleration control.
+```cpp
+    case STEERING: {
+        /*
+          in steering mode we control lateral acceleration
+          directly. We first calculate the maximum lateral
+          acceleration at full steering lock for this speed. That is
+          V^2/R where R is the radius of turn. We get the radius of
+          turn from half the STEER2SRV_P.
+         */
+        float max_g_force = ground_speed * ground_speed / steerController.get_turn_radius();
+
+        // constrain to user set TURN_MAX_G
+        max_g_force = constrain_float(max_g_force, 0.1f, g.turn_max_g * GRAVITY_MSS);
+
+        lateral_acceleration = max_g_force * (channel_steer->pwm_to_angle()/4500.0f);
+        calc_nav_steer();
+
+        // and throttle gives speed in proportion to cruise speed, up
+        // to 50% throttle, then uses nudging above that.
+        float target_speed = channel_throttle->pwm_to_angle() * 0.01 * 2 * g.speed_cruise;
+        set_reverse(target_speed < 0);
+        if (in_reverse) {
+            target_speed = constrain_float(target_speed, -g.speed_cruise, 0);
+        } else {
+            target_speed = constrain_float(target_speed, 0, g.speed_cruise);
+        }
+        calc_throttle(target_speed);
+        break;
+    }
+    ...
+```
+**LEARNING and MANUAL**: servo control needed.
+```cpp
+    case LEARNING:
+    case MANUAL:
+        /*
+          in both MANUAL and LEARNING we pass through the
+          controls. Setting servo_out here actually doesn't matter, as
+          we set the exact value in set_servos(), but it helps for
+          logging
+         */
+        channel_throttle->servo_out = channel_throttle->control_in;
+        channel_steer->servo_out = channel_steer->pwm_to_angle();
+
+        // mark us as in_reverse when using a negative throttle to
+        // stop AHRS getting off
+        set_reverse(channel_throttle->servo_out < 0);
+        break;
+
+    case HOLD:
+        // hold position - stop motors and center steering
+        channel_throttle->servo_out = 0;
+        channel_steer->servo_out = 0;
+        set_reverse(false);
+        break;
+
+    case INITIALISING:
+        break;
+	}
+}
+...
+```
+The aim of this code is setting the pilot mode.The options are selectec through a case.
+
+You can see each implemented option description commented on the code.
+
+```cpp
+
+static void update_navigation()
+{
+    switch (control_mode) {
+    case MANUAL:
+    case HOLD:
+    case LEARNING:
+    case STEERING:
+    case INITIALISING:
+        break;
+
+    case AUTO:
+		mission.update();
+        break;
+
+    case RTL:
+    case GUIDED:
+        // no loitering around the wp with the rover, goes direct to the wp position
+        calc_lateral_acceleration();
+        calc_nav_steer();
+        if (verify_RTL()) {
+            channel_throttle->servo_out = g.throttle_min.get();
+            set_mode(HOLD);
+        }
+        break;
+	}
+}
+
+AP_HAL_MAIN();
+```
+Once the mode is updated, the navigation should be updated as well.
+
+When selection AUTO mode,`mission.update()`ensures the command queues are loaded with the next command and calls main programs `command_init` and `command_verify` functions to progress the mission should be called at 10hz or higher. The implementation of this method can be found at [AP_Mission/Mission.cpp](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/AP_Mission/AP_Mission.cpp#L159).
+
+When selecting  Guide it goes directly to the wanted position (wp).
