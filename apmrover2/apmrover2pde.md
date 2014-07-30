@@ -630,3 +630,185 @@ static bool auto_triggered;
 ...
 ```
 Here are declared the varibles for controlling the location and the route the rover is following.This code content is, is resume, some definitions for **control variables**.
+
+```cpp
+////////////////////////////////////////////////////////////////////////////////
+// Ground speed
+////////////////////////////////////////////////////////////////////////////////
+// The amount current ground speed is below min ground speed.  meters per second
+static float 	ground_speed = 0;
+static int16_t throttle_last = 0, throttle = 500;
+...
+```
+The gound speed and the throttle variables definition, for later, be able t control them.
+
+```cpp
+
+////////////////////////////////////////////////////////////////////////////////
+// CH7 control
+////////////////////////////////////////////////////////////////////////////////
+
+// Used to track the CH7 toggle state.
+// When CH7 goes LOW PWM from HIGH PWM, this value will have been set true
+// This allows advanced functionality to know when to execute
+static bool ch7_flag;
+
+////////////////////////////////////////////////////////////////////////////////
+// Battery Sensors
+////////////////////////////////////////////////////////////////////////////////
+static AP_BattMonitor battery;
+...
+```
+
+`ch7_flag` is the channel 7 control variable.When it returns true the ch7 is in Pulse-width modulation (PWM) high state.
+
+After the ch7 control block we find `battery`,a [AP_BattMonitor](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/AP_BattMonitor/AP_BattMonitor.h) class variable, for battery monitoring.
+
+```cpp
+
+////////////////////////////////////////////////////////////////////////////////
+// Navigation control variables
+////////////////////////////////////////////////////////////////////////////////
+// The instantaneous desired lateral acceleration in m/s/s
+static float lateral_acceleration;
+
+////////////////////////////////////////////////////////////////////////////////
+// Waypoint distances
+////////////////////////////////////////////////////////////////////////////////
+// Distance between rover and next waypoint.  Meters
+static float wp_distance;
+// Distance between previous and next waypoint.  Meters
+static int32_t wp_totalDistance;
+
+////////////////////////////////////////////////////////////////////////////////
+// Conditional command
+////////////////////////////////////////////////////////////////////////////////
+// A value used in condition commands (eg delay, change alt, etc.)
+// For example in a change altitude command, it is the altitude to change to.
+static int32_t 	condition_value;
+// A starting value used to check the status of a conditional command.
+// For example in a delay command the condition_start records that start time for the delay
+static int32_t 	condition_start;
+
+////////////////////////////////////////////////////////////////////////////////
+// 3D Location vectors
+// Location structure defined in AP_Common
+////////////////////////////////////////////////////////////////////////////////
+// The home location used for RTL.  The location is set when we first get stable GPS lock
+static const struct	Location &home = ahrs.get_home();
+// Flag for if we have gps lock and have set the home location
+static bool	home_is_set;
+// The location of the previous waypoint.  Used for track following and altitude ramp calculations
+static struct 	Location prev_WP;
+// The location of the current/active waypoint.  Used for track following
+static struct 	Location next_WP;
+// The location of the active waypoint in Guided mode.
+static struct  	Location guided_WP;
+
+////////////////////////////////////////////////////////////////////////////////
+// IMU variables
+////////////////////////////////////////////////////////////////////////////////
+// The main loop execution time.  Seconds
+//This is the time between calls to the DCM algorithm and is the Integration time for the gyros.
+static float G_Dt						= 0.02;
+
+////////////////////////////////////////////////////////////////////////////////
+// Performance monitoring
+////////////////////////////////////////////////////////////////////////////////
+// Timer used to accrue data and trigger recording of the performanc monitoring log message
+static int32_t 	perf_mon_timer;
+// The maximum main loop execution time recorded in the current performance monitoring interval
+static uint32_t 	G_Dt_max;
+
+////////////////////////////////////////////////////////////////////////////////
+// System Timers
+////////////////////////////////////////////////////////////////////////////////
+// Time in microseconds of start of main control loop.
+static uint32_t 	fast_loopTimer_us;
+// Number of milliseconds used in last main loop cycle
+static uint32_t		delta_us_fast_loop;
+// Counter of main loop executions.  Used for performance monitoring and failsafe processing
+static uint16_t			mainLoop_count;
+
+// set if we are driving backwards
+static bool in_reverse;
+...
+```
+This part of the code stablish variable for diferents aims.You can follow the comments over the code itself, in order to inquire what performance is each variable designed for.
+
+```cpp
+////////////////////////////////////////////////////////////////////////////////
+// Top-level logic
+////////////////////////////////////////////////////////////////////////////////
+
+/*
+  scheduler table - all regular tasks should be listed here, along
+  with how often they should be called (in 20ms units) and the maximum
+  time they are expected to take (in microseconds)
+ */
+static const AP_Scheduler::Task scheduler_tasks[] PROGMEM = {
+	{ read_radio,             1,   1000 },
+    { ahrs_update,            1,   6400 },
+    { read_sonars,            1,   2000 },
+    { update_current_mode,    1,   1500 },
+    { set_servos,             1,   1500 },
+    { update_GPS_50Hz,        1,   2500 },
+    { update_GPS_10Hz,        5,   2500 },
+    { update_alt,             5,   3400 },
+    { navigate,               5,   1600 },
+    { update_compass,         5,   2000 },
+    { update_commands,        5,   1000 },
+    { update_logging1,        5,   1000 },
+    { update_logging2,        5,   1000 },
+    { gcs_retry_deferred,     1,   1000 },
+    { gcs_update,             1,   1700 },
+    { gcs_data_stream_send,   1,   3000 },
+    { read_control_switch,   15,   1000 },
+    { read_trim_switch,       5,   1000 },
+    { read_battery,           5,   1000 },
+    { read_receiver_rssi,     5,   1000 },
+    { update_events,          1,   1000 },
+    { check_usb_mux,         15,   1000 },
+    { mount_update,           1,    600 },
+    { gcs_failsafe_check,     5,    600 },
+    { compass_accumulate,     1,    900 },
+    { update_notify,          1,    300 },
+    { one_second_loop,       50,   3000 }
+};
+...
+```
+This is a control table, as commented on the code. It contains task and their periodicity.
+
+```cpp
+
+/*
+  setup is called when the sketch starts
+ */
+void setup() {
+    cliSerial = hal.console;
+
+    // load the default values of variables listed in var_info[]
+    AP_Param::setup_sketch_defaults();
+
+    // rover does not use arming nor pre-arm checks
+    AP_Notify::flags.armed = true;
+    AP_Notify::flags.pre_arm_check = true;
+    AP_Notify::flags.failsafe_battery = false;
+
+    notify.init(false);
+
+    battery.init();
+
+    rssi_analog_source = hal.analogin->channel(ANALOG_INPUT_NONE);
+
+	init_ardupilot();
+
+    // initialise the main loop scheduler
+    scheduler.init(&scheduler_tasks[0], sizeof(scheduler_tasks)/sizeof(scheduler_tasks[0]));
+}
+...
+```
+This is the first funtion to be called.Init the battery and the scheduler.
+
+```
+
