@@ -94,3 +94,54 @@ Depending on the `control_mode` some variables are defined.The `MAV_MODE_GLAG` a
 - `MAV_MODE_FLAG_AUTO_ENABLED`:autonomous mode enabled, system finds its own goal positions. Guided flag can be set or not, depends on the actual implementation.
 
 At [ardupilot/libraries/GCS_MAVLink/include/mavlink/v1.0](https://github.com/diydrones/ardupilot/tree/master/libraries/GCS_MAVLink/include/mavlink/v1.0) you can find all these identifiers.
+
+```cpp
+
+#if ENABLE_STICK_MIXING==ENABLED
+    if (control_mode != INITIALISING) {
+        // all modes except INITIALISING have some form of manual
+        // override if stick mixing is enabled
+        base_mode |= MAV_MODE_FLAG_MANUAL_INPUT_ENABLED;
+    }
+#endif
+...
+```
+ Remote control input is enabled, in case the control mode is not INITIALISING.
+
+```cpp
+
+#if HIL_MODE != HIL_MODE_DISABLED
+    base_mode |= MAV_MODE_FLAG_HIL_ENABLED;
+#endif
+
+    // we are armed if we are not initialising
+    if (control_mode != INITIALISING && ahrs.get_armed()) {
+        base_mode |= MAV_MODE_FLAG_SAFETY_ARMED;
+    }
+
+    // indicate we have set a custom mode
+    base_mode |= MAV_MODE_FLAG_CUSTOM_MODE_ENABLED;
+
+    mavlink_msg_heartbeat_send(
+        chan,
+        MAV_TYPE_GROUND_ROVER,
+        MAV_AUTOPILOT_ARDUPILOTMEGA,
+        base_mode,
+        custom_mode,
+        system_status);
+}
+...
+```
+The Hil mode is defined in the [APMrover2/config.h](https://github.com/diydrones/ardupilot/blob/master/APMrover2/config.h#L63).As mentioned before, the simulation Hardware-in-the-loop (HIL) is a technique used for the development and testing of complex embedded systems in real time.
+
+First this code checks if HIL is enabled in some way.
+` MAV_MODE_FLAG_HIL_ENABLED` also enables hardware in the loop simulation (all motors / actuators are blocked, but internal software is full operational).
+
+After that ` MAV_MODE_FLAG_SAFETY_ARMED` sets MAV safety to armed. Motors are enabled / running / can start, that means: "Ready to fly".
+
+Then `MAV_MODE_FLAG_CUSTOM_MODE_ENABLED` is used to set a custom mode(a bitfield for use for autopilot-specific flags).
+
+You can find the implementation of `mavlink_msg_heartbeat_send`[here](https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/include/mavlink/v1.0/common/mavlink_msg_heartbeat.h#L168), for sending a heartbeat message.
+
+
+```cpp
