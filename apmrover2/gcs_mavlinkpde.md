@@ -522,3 +522,34 @@ static void NOINLINE send_rangefinder(mavlink_channel_t chan)
 Using sonar methods implemented [here](https://github.com/geeksville/ardupilot-1/blob/master/APMrover2/sensors.pde#L56) report smaller distance of two sonars if more than one enabled.
 
 Then using `mavlink_msg_rangefinder_send`, implemented [here](https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/include/mavlink/v1.0/ardupilotmega/mavlink_msg_rangefinder.h#L135),  sent a message with the distance in meters and a raw voltage if available(zero otherwise).
+```cpp
+static void NOINLINE send_current_waypoint(mavlink_channel_t chan)
+{
+    mavlink_msg_mission_current_send(chan, mission.get_current_nav_index());
+}
+...
+```
+`mavlink_msg_mission_current_send` implemented [here](https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/include/mavlink/v1.0/common/mavlink_msg_mission_current.h#L126) for sending a `mission_current` message, which reports the mission command in Mavlink.For this aim `get_current_nav_index` is used: `get_current_nav_index`  returns the current "navigation" command index. Note that this will return 0 if there is no command. This is used in MAVLink reporting of the mission command.
+
+```cpp
+static void NOINLINE send_statustext(mavlink_channel_t chan)
+{
+    mavlink_statustext_t *s = &gcs[chan-MAVLINK_COMM_0].pending_status;
+    mavlink_msg_statustext_send(
+        chan,
+        s->severity,
+        s->text);
+}
+...
+```
+This code sends a message as implemented [here](https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/include/mavlink/v1.0/common/mavlink_msg_statustext.h#L131).
+- `severity` of status. Relies on the definitions within RFC-5424(RFC 5424 is The Syslog Protocol).
+
+
+- Status `text` message, without null termination character.
+
+```cpp
+
+https://github.com/BeaglePilot/ardupilot/blob/master/APMrover2/GCS_Mavlink.pde#L360
+
+messages:https://github.com/diydrones/ardupilot/tree/master/libraries/GCS_MAVLink/include/mavlink/v1.0
