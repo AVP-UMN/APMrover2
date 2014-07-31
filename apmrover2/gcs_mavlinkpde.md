@@ -434,3 +434,24 @@ If the HIL_MODE is disabled calls `mavlink_msg_servo_output_raw_send` implemente
 ...
 ```
 If HIL_MODE is enabled uses [RC_Channel](https://github.com/diydrones/ardupilot/blob/master/libraries/RC_Channel/RC_Channel.h#L124) manager.
+
+```cpp
+
+static void NOINLINE send_vfr_hud(mavlink_channel_t chan)
+{
+    mavlink_msg_vfr_hud_send(
+        chan,
+        gps.ground_speed(),
+        gps.ground_speed(),
+        (ahrs.yaw_sensor / 100) % 360,
+        (uint16_t)(100 * fabsf(channel_throttle->norm_output())),
+        current_loc.alt / 100.0,
+        0);
+}
+...
+```
+
+`mavlink_msg_vrf_hud_send` implemented [here](https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/include/mavlink/v1.0/common/mavlink_msg_vfr_hud.h#L171) send information about: Current airspeed in m/s and ground speed in m/s,
+current throttle setting, current altitude (MSL)...
+
+ This information is get through `gps.ground_speed()`, `ahrs.yaw_sensor`...)
