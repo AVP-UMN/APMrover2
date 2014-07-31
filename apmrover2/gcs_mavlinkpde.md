@@ -455,3 +455,70 @@ static void NOINLINE send_vfr_hud(mavlink_channel_t chan)
 current throttle setting, current altitude (MSL)...
 
  This information is get through `gps.ground_speed()`, `ahrs.yaw_sensor`...)
+
+```cpp
+
+// report simulator state
+static void NOINLINE send_simstate(mavlink_channel_t chan)
+{
+#if CONFIG_HAL_BOARD == HAL_BOARD_AVR_SITL
+    sitl.simstate_send(chan);
+#endif
+}
+...
+```
+`void simstate_send(mavlink_channel_t chan);`for reporting the state.Implemented [here](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/SITL/SITL.h#L87).
+
+
+```cpp
+static void NOINLINE send_hwstatus(mavlink_channel_t chan)
+{
+    mavlink_msg_hwstatus_send(
+        chan,
+        hal.analogin->board_voltage()*1000,
+        hal.i2c->lockup_count());
+}
+...
+```
+ ` mavlink_msg_hwstatus_send` implemented [here](https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/include/mavlink/v1.0/ardupilotmega/mavlink_msg_hwstatus.h#L135) is used to sent  Vcc- board voltage (mV) and I2Cerr- I2C error count.
+
+The function definition take care about the arguments passed to it) is :`static inline void mavlink_msg_hwstatus_send(mavlink_channel_t chan, uint16_t Vcc, uint8_t I2Cerr)`
+
+```cpp
+
+static void NOINLINE send_rangefinder(mavlink_channel_t chan)
+{
+    if (!sonar.healthy()) {
+        // no sonar to report
+        return;
+    }
+
+    /*
+      report smaller distance of two sonars if more than one enabled
+     */
+    float distance_cm, voltage;
+    if (!sonar.healthy(1)) {
+        distance_cm = sonar.distance_cm(0);
+        voltage = sonar.voltage_mv(0) * 0.001f;
+    } else {
+        float dist1 = sonar.distance_cm(0);
+        float dist2 = sonar.distance_cm(1);
+        if (dist1 <= dist2) {
+            distance_cm = dist1;
+            voltage = sonar.voltage_mv(0) * 0.001f;
+        } else {
+            distance_cm = dist2;
+            voltage = sonar.voltage_mv(1) * 0.001f;
+        }
+    }
+    mavlink_msg_rangefinder_send(
+        chan,
+        distance_cm * 0.01f,
+        voltage);
+}
+...
+```
+
+Using sonar methods implemented [here](https://github.com/geeksville/ardupilot-1/blob/master/APMrover2/sensors.pde#L56) report smaller distance of two sonars if more than one enabled.
+
+Then using `mavlink_msg_rangefinder_send`, implemented [here](https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/include/mavlink/v1.0/ardupilotmega/mavlink_msg_rangefinder.h#L135),  sent a message with the distance in meters and a raw voltage if available(zero otherwise).
