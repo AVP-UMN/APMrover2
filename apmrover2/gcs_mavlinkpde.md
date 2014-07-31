@@ -145,3 +145,32 @@ You can find the implementation of `mavlink_msg_heartbeat_send`[here](https://gi
 
 
 ```cpp
+
+
+static NOINLINE void send_attitude(mavlink_channel_t chan)
+{
+    Vector3f omega = ahrs.get_gyro();
+    mavlink_msg_attitude_send(
+        chan,
+        millis(),
+        ahrs.roll,
+        ahrs.pitch,
+        ahrs.yaw,
+        omega.x,
+        omega.y,
+        omega.z);
+}
+...
+```
+This function `send_attitude` sends a message containing the attitude variables' values:
+
+- `get_gyro()` return a smoothed and corrected gyro vector.
+
+
+- `mavlink_msg_attitude_send` implemented [here](https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/include/mavlink/v1.0/common/mavlink_msg_attitude.h#L180) send an attitude message:
+ +  (x,y,z) for position of the certer of gravity respect to a non-inertial system.
+ + (roll,pitch,yaw) for orientation relative to a body- fixed system (inertial) .
+
+Note that the position of a body is perfectly determined with both the position of a point (GC) and the rotated angles relative to a given position.
+
+![ref_frame](./ref_frames.jpg)
