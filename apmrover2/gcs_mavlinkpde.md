@@ -290,3 +290,48 @@ For example:
 ...
 ```
 `mavlink_msg_sys_status_send`implemented [here](https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/include/mavlink/v1.0/common/mavlink_msg_sys_status.h#L234) sends a message showing the **status of the system**. The message includes data about:   which controllers and sensors are present, which are enabled, which controllers and sensors are operational or have an error...(Value of 0: not present. Value of 1: present).
+
+```cpp
+static void NOINLINE send_location(mavlink_channel_t chan)
+{
+    uint32_t fix_time;
+    // if we have a GPS fix, take the time as the last fix time. That
+    // allows us to correctly calculate velocities and extrapolate
+    // positions.
+    // If we don't have a GPS fix then we are dead reckoning, and will
+    // use the current boot time as the fix time.
+
+    if (gps.status() >= AP_GPS::GPS_OK_FIX_2D) {
+        fix_time = gps.last_fix_time_ms();
+    } else {
+        fix_time = millis();
+    }
+    const Vector3f &vel = gps.velocity();
+    mavlink_msg_global_position_int_send(
+        chan,
+        fix_time,
+        current_loc.lat,                   // in 1E7 degrees
+        current_loc.lng,                   // in 1E7 degrees
+        gps.location().alt * 10UL,         // millimeters above sea level
+        (current_loc.alt - home.alt) * 10, // millimeters above ground
+        vel.x * 100,  // X speed cm/s (+ve North)
+        vel.y * 100,  // Y speed cm/s (+ve East)
+        vel.z * -100, // Z speed cm/s (+ve up)
+        ahrs.yaw_sensor);
+}
+...
+```
+Some notes about the functions called.
+
+- `last_fix_time_ms()` returns the time we got our last fix in system milliseconds. This is used when calculating how far we might have moved since that fix.
+
+
+- `gps.velocity()`returns 3D velocity in NED format.
+
+
+- `location()`returns the location of last fix.
+
+
+- `yaw_sensor` is an  `AP_InertialSensor`exported to AHRS, which can be defined as, a gyroscopic device that measures a vehicle’s angular velocity around its vertical axis.
+
+The information returned by all these functions is used when calling `mavlink_msg_global_position_int_send`, implemented [here](https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/include/mavlink/v1.0/common/mavlink_msg_global_position_int.h#L198).
