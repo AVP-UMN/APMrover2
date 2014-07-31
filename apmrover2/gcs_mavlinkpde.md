@@ -145,6 +145,8 @@ Then `MAV_MODE_FLAG_CUSTOM_MODE_ENABLED` is used to set a custom mode(a bitfield
 
 You can find the implementation of `mavlink_msg_heartbeat_send`[here](https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/include/mavlink/v1.0/common/mavlink_msg_heartbeat.h#L168), for sending a heartbeat message.
 
+**NOTE**- `mavlink_msg...` can be found at [/GCS_MAVLink/include/mavlink/v1.0/ardupilotmega](https://github.com/diydrones/ardupilot/tree/master/libraries/GCS_MAVLink/include/mavlink/v1.0/common) or at [/GCS_MAVLink/include/mavlink/v1.0/common](https://github.com/diydrones/ardupilot/tree/master/libraries/GCS_MAVLink/include/mavlink/v1.0/common).
+
 
 ```cpp
 
@@ -335,3 +337,100 @@ Some notes about the functions called.
 - `yaw_sensor` is an  `AP_InertialSensor`exported to AHRS, which can be defined as, a gyroscopic device that measures a vehicle’s angular velocity around its vertical axis.
 
 The information returned by all these functions is used when calling `mavlink_msg_global_position_int_send`, implemented [here](https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/include/mavlink/v1.0/common/mavlink_msg_global_position_int.h#L198).
+
+```cpp
+
+static void NOINLINE send_nav_controller_output(mavlink_channel_t chan)
+{
+    mavlink_msg_nav_controller_output_send(
+        chan,
+        lateral_acceleration, // use nav_roll to hold demanded Y accel
+        gps.ground_speed() * ins.get_gyro().z, // use nav_pitch to hold actual Y accel
+        nav_controller->nav_bearing_cd() * 0.01f,
+        nav_controller->target_bearing_cd() * 0.01f,
+        wp_distance,
+        0,
+        groundspeed_error,
+        nav_controller->crosstrack_error());
+}
+...
+```
+
+`send_nav_controller_output` is implemented [here](https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/include/mavlink/v1.0/common/mavlink_msg_nav_controller_output.h#L189) and sends a `nav_controller_output` message.
+
+The `nav_controller`methods are defined in [AP_Navigation.h](https://github.com/diydrones/ardupilot/blob/master/libraries/AP_Navigation/AP_Navigation.h#L35):
+
+- `nav_bearing_cd()` returns the tracking bearing that the navigation controller is using in centi-degrees. This is used to display an arrow on ground stations showing the effect of the cross-tracking in the controller.
+
+- `target_bearing_cd()`returns the target bearing in centi-degrees. This is the bearing from the vehicles current position to the target waypoint.
+
+- `crosstrack_error()`returns the crosstrack error in meters. This is the distance inthe X-Y plane that we are off the desired track.
+
+```cpp
+
+#if HIL_MODE != HIL_MODE_DISABLED
+static void NOINLINE send_servo_out(mavlink_channel_t chan)
+{
+    // normalized values scaled to -10000 to 10000
+    // This is used for HIL.  Do not change without discussing with
+    // HIL maintainers
+    mavlink_msg_rc_channels_scaled_send(
+        chan,
+        millis(),
+        0, // port 0
+        10000 * channel_steer->norm_output(),
+        0,
+        10000 * channel_throttle->norm_output(),
+        0,
+        0,
+        0,
+        0,
+        0,
+        receiver_rssi);
+}
+#endif
+...
+```
+If HIL_MODE is enabled send a` mavlink_msg_rc_channels_scaled_send` implemented [here](https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/include/mavlink/v1.0/common/mavlink_msg_rc_channels_scaled.h#L216).This send instructions to the corresponding channel, in this case: steer and throttle control channels.
+
+```cpp
+
+static void NOINLINE send_radio_out(mavlink_channel_t chan)
+{
+#if HIL_MODE == HIL_MODE_DISABLED || HIL_SERVOS
+    mavlink_msg_servo_output_raw_send(
+        chan,
+        micros(),
+        0,     // port
+        hal.rcout->read(0),
+        hal.rcout->read(1),
+        hal.rcout->read(2),
+        hal.rcout->read(3),
+        hal.rcout->read(4),
+        hal.rcout->read(5),
+        hal.rcout->read(6),
+        hal.rcout->read(7));
+...
+```
+If the HIL_MODE is disabled calls `mavlink_msg_servo_output_raw_send` implemented [here](https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/include/mavlink/v1.0/common/mavlink_msg_servo_output_raw.h#L207). Send a message to the servo output port for using RCOutput `read()` method to read back current output state, as either single channel or array of channels.
+
+```cpp
+...
+#else
+    mavlink_msg_servo_output_raw_send(
+        chan,
+        micros(),
+        0,     // port
+        RC_Channel::rc_channel(0)->radio_out,
+        RC_Channel::rc_channel(1)->radio_out,
+        RC_Channel::rc_channel(2)->radio_out,
+        RC_Channel::rc_channel(3)->radio_out,
+        RC_Channel::rc_channel(4)->radio_out,
+        RC_Channel::rc_channel(5)->radio_out,
+        RC_Channel::rc_channel(6)->radio_out,
+        RC_Channel::rc_channel(7)->radio_out);
+#endif
+}
+...
+```
+If HIL_MODE is enabled uses [RC_Channel](https://github.com/diydrones/ardupilot/blob/master/libraries/RC_Channel/RC_Channel.h#L124) manager.
