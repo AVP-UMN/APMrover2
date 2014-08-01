@@ -514,6 +514,8 @@ is a photo or video camera manager, with EEPROM-backed storage of constants.
 
 As the camera is enabled, also the **mount must be enabled**.[AP_Mount](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/AP_Mount/AP_Mount.h) moves a 2 or 3 axis mount attached to vehicle.Its main use is for mount to track targets or stabilise camera plus other modes.
 
+**current_loc** varible is a instance of `Location` and it will be used very often when dealing with the gps.Location utilities are in the [AP_Math](https://github.com/diydrones/ardupilot/tree/master/libraries/AP_Math) module.
+
 ```cpp
 
 ////////////////////////////////////////////////////////////////////////////////

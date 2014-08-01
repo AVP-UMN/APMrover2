@@ -336,6 +336,7 @@ Some notes about the functions called.
 
 - `yaw_sensor` is an  `AP_InertialSensor`exported to AHRS, which can be defined as, a gyroscopic device that measures a vehicle’s angular velocity around its vertical axis.
 
+- `current_loc`is a Location instance. ALl location functions are stored in [AP_Math]
 The information returned by all these functions is used when calling `mavlink_msg_global_position_int_send`, implemented [here](https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/include/mavlink/v1.0/common/mavlink_msg_global_position_int.h#L198).
 
 ```cpp
@@ -549,7 +550,27 @@ This code sends a message as implemented [here](https://github.com/diydrones/ard
 - Status `text` message, without null termination character.
 
 ```cpp
+// are we still delaying telemetry to try to avoid Xbee bricking?
+static bool telemetry_delayed(mavlink_channel_t chan)
+{
+    uint32_t tnow = millis() >> 10;
+    if (tnow > (uint32_t)g.telem_delay) {
+        return false;
+    }
+    if (chan == MAVLINK_COMM_0 && hal.gpio->usb_connected()) {
+        // this is USB telemetry, so won't be an Xbee
+        return false;
+    }
+    // we're either on the 2nd UART, or no USB cable is connected
+    // we need to delay telemetry by the TELEM_DELAY time
+    return true;
+}
+...
+```
+**Telemetry** is the highly automated communications process by which measurements are made and other data collected at remote or inaccessible points and transmitted to receiving equipment for monitoring.
 
-https://github.com/BeaglePilot/ardupilot/blob/master/APMrover2/GCS_Mavlink.pde#L360
+Now we try to delay telemetry using `telem_delay` defined [here](https://github.com/diydrones/ardupilot/blob/master/APMrover2/Parameters.h#L219).
 
-messages:https://github.com/diydrones/ardupilot/tree/master/libraries/GCS_MAVLink/include/mavlink/v1.0
+Notice, that it is checked if the usb is connected or not, with `usb_connected` , which return true if USB cable is connected .
+
+
