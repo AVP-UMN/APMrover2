@@ -574,3 +574,168 @@ Now we try to delay telemetry using `telem_delay` defined [here](https://github.
 Notice, that it is checked if the usb is connected or not, with `usb_connected` , which return true if USB cable is connected .
 
 
+```cpp
+// try to send a message, return false if it won't fit in the serial tx buffer
+bool GCS_MAVLINK::try_send_message(enum ap_message id)
+{
+    int16_t payload_space = comm_get_txspace(chan) - MAVLINK_NUM_NON_PAYLOAD_BYTES;
+
+    if (telemetry_delayed(chan)) {
+        return false;
+    }
+
+    // if we don't have at least 1ms remaining before the main loop
+    // wants to fire then don't send a mavlink message. We want to
+    // prioritise the main flight control loop over communications
+    if (!in_mavlink_delay && scheduler.time_available_usec() < 1200) {
+        gcs_out_of_time = true;
+        return false;
+    }
+    ...
+```
+This slice of code checks if we j¡have remaining time for sending a message.
+
+```cpp
+    switch (id) {
+    case MSG_HEARTBEAT:
+        CHECK_PAYLOAD_SIZE(HEARTBEAT);
+        gcs[chan-MAVLINK_COMM_0].last_heartbeat_time = hal.scheduler->millis();
+        send_heartbeat(chan);
+        return true;
+
+    case MSG_EXTENDED_STATUS1:
+        CHECK_PAYLOAD_SIZE(SYS_STATUS);
+        send_extended_status1(chan);
+        CHECK_PAYLOAD_SIZE(POWER_STATUS);
+        gcs[chan-MAVLINK_COMM_0].send_power_status();
+        break;
+
+    case MSG_EXTENDED_STATUS2:
+        CHECK_PAYLOAD_SIZE(MEMINFO);
+        gcs[chan-MAVLINK_COMM_0].send_meminfo();
+        break;
+
+    case MSG_ATTITUDE:
+        CHECK_PAYLOAD_SIZE(ATTITUDE);
+        send_attitude(chan);
+        break;
+
+    case MSG_LOCATION:
+        CHECK_PAYLOAD_SIZE(GLOBAL_POSITION_INT);
+        send_location(chan);
+        break;
+
+    case MSG_NAV_CONTROLLER_OUTPUT:
+        if (control_mode != MANUAL) {
+            CHECK_PAYLOAD_SIZE(NAV_CONTROLLER_OUTPUT);
+            send_nav_controller_output(chan);
+        }
+        break;
+
+    case MSG_GPS_RAW:
+        CHECK_PAYLOAD_SIZE(GPS_RAW_INT);
+        gcs[chan-MAVLINK_COMM_0].send_gps_raw(gps);
+        break;
+
+    case MSG_SYSTEM_TIME:
+        CHECK_PAYLOAD_SIZE(SYSTEM_TIME);
+        gcs[chan-MAVLINK_COMM_0].send_system_time(gps);
+        break;
+
+    case MSG_SERVO_OUT:
+    #if HIL_MODE != HIL_MODE_DISABLED
+        CHECK_PAYLOAD_SIZE(RC_CHANNELS_SCALED);
+        send_servo_out(chan);
+#endif
+        break;
+
+    case MSG_RADIO_IN:
+        CHECK_PAYLOAD_SIZE(RC_CHANNELS_RAW);
+        gcs[chan-MAVLINK_COMM_0].send_radio_in(receiver_rssi);
+        break;
+
+    case MSG_RADIO_OUT:
+        CHECK_PAYLOAD_SIZE(SERVO_OUTPUT_RAW);
+        send_radio_out(chan);
+        break;
+
+    case MSG_VFR_HUD:
+        CHECK_PAYLOAD_SIZE(VFR_HUD);
+        send_vfr_hud(chan);
+        break;
+
+    case MSG_RAW_IMU1:
+        CHECK_PAYLOAD_SIZE(RAW_IMU);
+        gcs[chan-MAVLINK_COMM_0].send_raw_imu(ins, compass);
+        break;
+
+    case MSG_RAW_IMU3:
+        CHECK_PAYLOAD_SIZE(SENSOR_OFFSETS);
+        gcs[chan-MAVLINK_COMM_0].send_sensor_offsets(ins, compass, barometer);
+        break;
+
+    case MSG_CURRENT_WAYPOINT:
+        CHECK_PAYLOAD_SIZE(MISSION_CURRENT);
+        send_current_waypoint(chan);
+        break;
+
+    case MSG_NEXT_PARAM:
+        CHECK_PAYLOAD_SIZE(PARAM_VALUE);
+        gcs[chan-MAVLINK_COMM_0].queued_param_send();
+        break;
+
+    case MSG_NEXT_WAYPOINT:
+        CHECK_PAYLOAD_SIZE(MISSION_REQUEST);
+        gcs[chan-MAVLINK_COMM_0].queued_waypoint_send();
+        break;
+
+    case MSG_STATUSTEXT:
+        CHECK_PAYLOAD_SIZE(STATUSTEXT);
+        send_statustext(chan);
+        break;
+
+    case MSG_AHRS:
+        CHECK_PAYLOAD_SIZE(AHRS);
+        gcs[chan-MAVLINK_COMM_0].send_ahrs(ahrs);
+        break;
+
+    case MSG_SIMSTATE:
+        CHECK_PAYLOAD_SIZE(SIMSTATE);
+        send_simstate(chan);
+        break;
+
+    case MSG_HWSTATUS:
+        CHECK_PAYLOAD_SIZE(HWSTATUS);
+        send_hwstatus(chan);
+        break;
+
+    case MSG_RANGEFINDER:
+        CHECK_PAYLOAD_SIZE(RANGEFINDER);
+        send_rangefinder(chan);
+        break;
+
+    case MSG_RAW_IMU2:
+    case MSG_LIMITS_STATUS:
+    case MSG_FENCE_STATUS:
+    case MSG_WIND:
+        // unused
+        break;
+
+    case MSG_RETRY_DEFERRED:
+        break; // just here to prevent a warning
+	}
+
+
+    return true;
+}
+...
+```
+This case involve [MSG_](https://github.com/trunet/ardupilot/blob/master/APMrover2/defines.h) varibles. To ensure we never block on sending MAVLink messages
+ each `MSG_` is keept to a single MAVLink message.
+
+For example: In case `MSG_ATTITUDE`the previously defined function [send_attitude](https://github.com/diydrones/ardupilot/blob/master/APMrover2/GCS_Mavlink.pde#L94) is called.
+
+All the options in this case are used in a similar way.
+
+- https://github.com/diydrones/ardupilot/blob/master/APMrover2/GCS_Mavlink.pde#L528
+- https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/include/mavlink/v1.0/common/common.h
