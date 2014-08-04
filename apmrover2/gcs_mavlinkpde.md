@@ -834,7 +834,47 @@ This codes pass stream rates to the GCS.In this first case about the raw sensor.
 };
 ...
 ```
+AS you can see the scheme is similar to the explained one.
 
-- https://github.com/diydrones/ardupilot/blob/master/APMrover2/GCS_Mavlink.pde#L615
-- https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/include/mavlink/v1.0/common/common.h
+```cpp
+// see if we should send a stream now. Called at 50Hz
+bool GCS_MAVLINK::stream_trigger(enum streams stream_num)
+{
+    if (stream_num >= NUM_STREAMS) {
+        return false;
+    }
+    float rate = (uint8_t)streamRates[stream_num].get();
+
+    // send at a much lower rate while handling waypoints and
+    // parameter sends
+    if ((stream_num != STREAM_PARAMS) &&
+        (waypoint_receiving || _queued_parameter != NULL)) {
+        rate *= 0.25;
+    }
+
+    if (rate <= 0) {
+        return false;
+    }
+
+    if (stream_ticks[stream_num] == 0) {
+        // we're triggering now, setup the next trigger point
+        if (rate > 50) {
+            rate = 50;
+        }
+        stream_ticks[stream_num] = (50 / rate) + stream_slowdown;
+        return true;
+    }
+
+    // count down at 50Hz
+    stream_ticks[stream_num]--;
+    return false;
+}
+...
+```
+The stream parameters are defined in [GCS.h](https://github.com/trunet/ardupilot/blob/master/ArduCopter/GCS.h#L126)
+
+https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/include/mavlink/v1.0/common/common.h
+https://github.com/diydrones/ardupilot/blob/master/APMrover2/GCS_Mavlink.pde#L615
+https://github.com/trunet/ardupilot/blob/master/ArduCopter/GCS.h#L126
+
 
