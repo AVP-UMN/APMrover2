@@ -871,10 +871,122 @@ bool GCS_MAVLINK::stream_trigger(enum streams stream_num)
 }
 ...
 ```
-The stream parameters are defined in [GCS.h](https://github.com/trunet/ardupilot/blob/master/ArduCopter/GCS.h#L126)
 
+The stream parameters are defined in [GCS.h](https://github.com/diydrones/ardupilot/blob/master/APMrover2/GCS_Mavlink.pde#L615)
+
+This slice of code checks if the stream parameters are set in a such a way that a new stream should be sent.
+
+```cpp
+void
+GCS_MAVLINK::data_stream_send(void)
+{
+    gcs_out_of_time = false;
+
+    if (!in_mavlink_delay) {
+        handle_log_send(DataFlash);
+    }
+
+    if (_queued_parameter != NULL) {
+        if (streamRates[STREAM_PARAMS].get() <= 0) {
+            streamRates[STREAM_PARAMS].set(10);
+        }
+        if (stream_trigger(STREAM_PARAMS)) {
+            send_message(MSG_NEXT_PARAM);
+        }
+    }
+
+    if (gcs_out_of_time) return;
+
+    if (in_mavlink_delay) {
+#if HIL_MODE != HIL_MODE_DISABLED
+        // in HIL we need to keep sending servo values to ensure
+        // the simulator doesn't pause, otherwise our sensor
+        // calibration could stall
+        if (stream_trigger(STREAM_RAW_CONTROLLER)) {
+            send_message(MSG_SERVO_OUT);
+        }
+        if (stream_trigger(STREAM_RC_CHANNELS)) {
+            send_message(MSG_RADIO_OUT);
+        }
+#endif
+        // don't send any other stream types while in the delay callback
+        return;
+    }
+
+    if (gcs_out_of_time) return;
+
+    if (stream_trigger(STREAM_RAW_SENSORS)) {
+        send_message(MSG_RAW_IMU1);
+        send_message(MSG_RAW_IMU3);
+    }
+
+    if (gcs_out_of_time) return;
+
+    if (stream_trigger(STREAM_EXTENDED_STATUS)) {
+        send_message(MSG_EXTENDED_STATUS1);
+        send_message(MSG_EXTENDED_STATUS2);
+        send_message(MSG_CURRENT_WAYPOINT);
+        send_message(MSG_GPS_RAW);            // TODO - remove this message after location message is working
+        send_message(MSG_NAV_CONTROLLER_OUTPUT);
+    }
+
+    if (gcs_out_of_time) return;
+
+    if (stream_trigger(STREAM_POSITION)) {
+        // sent with GPS read
+        send_message(MSG_LOCATION);
+    }
+
+    if (gcs_out_of_time) return;
+
+    if (stream_trigger(STREAM_RAW_CONTROLLER)) {
+        send_message(MSG_SERVO_OUT);
+    }
+
+    if (gcs_out_of_time) return;
+
+    if (stream_trigger(STREAM_RC_CHANNELS)) {
+        send_message(MSG_RADIO_OUT);
+        send_message(MSG_RADIO_IN);
+    }
+
+    if (gcs_out_of_time) return;
+
+    if (stream_trigger(STREAM_EXTRA1)) {
+        send_message(MSG_ATTITUDE);
+        send_message(MSG_SIMSTATE);
+    }
+
+    if (gcs_out_of_time) return;
+
+    if (stream_trigger(STREAM_EXTRA2)) {
+        send_message(MSG_VFR_HUD);
+    }
+
+    if (gcs_out_of_time) return;
+
+    if (stream_trigger(STREAM_EXTRA3)) {
+        send_message(MSG_AHRS);
+        send_message(MSG_HWSTATUS);
+        send_message(MSG_RANGEFINDER);
+        send_message(MSG_SYSTEM_TIME);
+    }
+}
+
+
+...
+```
+Note: We have to set `in_mavlink_delay` to prevent logging while writing headers.
+
+if `stream trigger`fills the passed parameter then `send_message`is called. `send message`is defined [here](https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/GCS.h#L100) and sends a message with a single numeric parameter. This may be a standalone message, or the GCS driver may have its own way of locating additional parameters to send.
+
+```cpp
+...
+```
 https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/include/mavlink/v1.0/common/common.h
-https://github.com/diydrones/ardupilot/blob/master/APMrover2/GCS_Mavlink.pde#L615
+
+https://github.com/diydrones/ardupilot/blob/master/APMrover2/GCS_Mavlink.pde#L746
+
 https://github.com/trunet/ardupilot/blob/master/ArduCopter/GCS.h#L126
 
 
