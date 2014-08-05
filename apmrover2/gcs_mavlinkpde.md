@@ -981,12 +981,617 @@ Note: We have to set `in_mavlink_delay` to prevent logging while writing headers
 if `stream trigger`fills the passed parameter then `send_message`is called. `send message`is defined [here](https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/GCS.h#L100) and sends a message with a single numeric parameter. This may be a standalone message, or the GCS driver may have its own way of locating additional parameters to send.
 
 ```cpp
+
+void GCS_MAVLINK::handle_guided_request(AP_Mission::Mission_Command &cmd)
+{
+    guided_WP = cmd.content.location;
+
+    set_mode(GUIDED);
+
+    // make any new wp uploaded instant (in case we are already in Guided mode)
+    set_guided_WP();
+}
 ...
 ```
-https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/include/mavlink/v1.0/common/common.h
+The `quided_WP` is updated to the location value. The `set_mode`funtion is implemented in [system.pde](https://github.com/diydrones/ardupilot/blob/master/APMrover2/system.pde#L283) including a case for selecting the control mode(Guided,manual,hold...).
 
-https://github.com/diydrones/ardupilot/blob/master/APMrover2/GCS_Mavlink.pde#L746
+The `set_guided_WP()`funtion defined in [APMrover2/commands.h](https://github.com/diydrones/ardupilot/blob/master/APMrover2/commands.pde#L40) copy the new location value to wp.
+```cpp
+void GCS_MAVLINK::handle_change_alt_request(AP_Mission::Mission_Command &cmd)
+{
+    // nothing to do
+}
+...
+```
+This funtion is not implemented yet.
+```cpp
+void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
+{
+    switch (msg->msgid) {
 
-https://github.com/trunet/ardupilot/blob/master/ArduCopter/GCS.h#L126
+    case MAVLINK_MSG_ID_REQUEST_DATA_STREAM:
+        {
+            handle_request_data_stream(msg, true);
+            break;
+        }
+
+    case MAVLINK_MSG_ID_COMMAND_LONG:
+        {
+            // decode
+            mavlink_command_long_t packet;
+            mavlink_msg_command_long_decode(msg, &packet);
+            if (mavlink_check_target(packet.target_system, packet.target_component)) break;
+
+            uint8_t result = MAV_RESULT_UNSUPPORTED;
+
+            // do command
+            send_text_P(SEVERITY_LOW,PSTR("command received: "));
+  ...
+```
+If `MAVLINK_MSG_ID_REQUEST_DATA_STREAM`, then [handle_request_data_stream](https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/GCS.h#L326) is called for sending a date request.
+
+Then if `MAVLINK_MSG_ID_COMMAND_LONG` then [mavlink_command_long_decode](https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/include/mavlink/v1.0/common/mavlink_msg_command_long.h#L432) for decoding a command_long message into a struct.
+
+```cpp
+
+            switch(packet.command) {
+
+            case MAV_CMD_NAV_RETURN_TO_LAUNCH:
+                set_mode(RTL);
+                result = MAV_RESULT_ACCEPTED;
+                break;
+...
+```
+Then if `MAV_CMD_NAV_RETURN_TO_LAUNCH`the `set_mode`is changed to RTL(Register Transfer Level). RTL calls on [do_RTL()](https://github.com/diydrones/ardupilot/blob/master/APMrover2/commands_logic.pde#L184)
+
+```cpp
+
+#if MOUNT == ENABLED
+            // Sets the region of interest (ROI) for the camera
+            case MAV_CMD_DO_SET_ROI:
+                Location roi_loc;
+                roi_loc.lat = (int32_t)(packet.param5 * 1.0e7f);
+                roi_loc.lng = (int32_t)(packet.param6 * 1.0e7f);
+                roi_loc.alt = (int32_t)(packet.param7 * 100.0f);
+                if (roi_loc.lat == 0 && roi_loc.lng == 0 && roi_loc.alt == 0) {
+                    // switch off the camera tracking if enabled
+                    if (camera_mount.get_mode() == MAV_MOUNT_MODE_GPS_POINT) {
+                        camera_mount.set_mode_to_default();
+                    }
+                } else {
+                    // send the command to the camera mount
+                    camera_mount.set_roi_cmd(&roi_loc);
+                }
+                result = MAV_RESULT_ACCEPTED;
+                break;
+#endif
+...
+```
+If the mount is enabled and `MAV_CMD_DO_SET_ROI` sets the region of interest (ROI) for a sensor set or the vehicle itself. This can then be used by the vehicles control system to control the vehicle attitude and the attitude of various sensors such as cameras. There are three cordinates needed to pin down the position.
+
+```cpp
+
+            case MAV_CMD_MISSION_START:
+                set_mode(AUTO);
+                result = MAV_RESULT_ACCEPTED;
+                break;
+                ...
+                ```
+Case `MAV_CMD_MISSION_START`  starts running a mission .`first_item`is the first mission item to run; `last_item` is  the last mission item to run (after this item is run, the mission ends).
+```cpp
+            case MAV_CMD_PREFLIGHT_CALIBRATION:
+                if (packet.param1 == 1 ||
+                    packet.param2 == 1 ||
+                    packet.param3 == 1) {
+                    startup_INS_ground(true);
+                }
+                if (packet.param4 == 1) {
+                    trim_radio();
+                }
+                result = MAV_RESULT_ACCEPTED;
+                break;
+            ...
+            ```
+Case `MAV_CMD_PREFLIGHT_CALIBRATION` tiggers calibration. This command will be only accepted if in pre-flight mode. For example:
+`Gyro calibration: 0: no, 1: yes`.
+
+```cpp
+
+            case MAV_CMD_PREFLIGHT_SET_SENSOR_OFFSETS:
+                if (packet.param1 == 2) {
+                    // save first compass's offsets
+                    compass.set_and_save_offsets(0, packet.param2, packet.param3, packet.param4);
+                    result = MAV_RESULT_ACCEPTED;
+                }
+                if (packet.param1 == 5) {
+                    // save secondary compass's offsets
+                    compass.set_and_save_offsets(1, packet.param2, packet.param3, packet.param4);
+                    result = MAV_RESULT_ACCEPTED;
+                }
+                break;
+
+        case MAV_CMD_DO_SET_MODE:
+            switch ((uint16_t)packet.param1) {
+            case MAV_MODE_MANUAL_ARMED:
+            case MAV_MODE_MANUAL_DISARMED:
+                set_mode(MANUAL);
+                result = MAV_RESULT_ACCEPTED;
+                break;
+
+            case MAV_MODE_AUTO_ARMED:
+            case MAV_MODE_AUTO_DISARMED:
+                set_mode(AUTO);
+                result = MAV_RESULT_ACCEPTED;
+                break;
+
+            case MAV_MODE_STABILIZE_DISARMED:
+            case MAV_MODE_STABILIZE_ARMED:
+                set_mode(LEARNING);
+                result = MAV_RESULT_ACCEPTED;
+                break;
+
+            default:
+                result = MAV_RESULT_UNSUPPORTED;
+            }
+            break;
+
+        case MAV_CMD_DO_SET_SERVO:
+            if (ServoRelayEvents.do_set_servo(packet.param1, packet.param2)) {
+                result = MAV_RESULT_ACCEPTED;
+            }
+            break;
+
+        case MAV_CMD_DO_REPEAT_SERVO:
+            if (ServoRelayEvents.do_repeat_servo(packet.param1, packet.param2, packet.param3, packet.param4*1000)) {
+                result = MAV_RESULT_ACCEPTED;
+            }
+            break;
+
+        case MAV_CMD_DO_SET_RELAY:
+            if (ServoRelayEvents.do_set_relay(packet.param1, packet.param2)) {
+                result = MAV_RESULT_ACCEPTED;
+            }
+            break;
+
+        case MAV_CMD_DO_REPEAT_RELAY:
+            if (ServoRelayEvents.do_repeat_relay(packet.param1, packet.param2, packet.param3*1000)) {
+                result = MAV_RESULT_ACCEPTED;
+            }
+            break;
+
+        case MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN:
+            if (packet.param1 == 1 || packet.param1 == 3) {
+                // when packet.param1 == 3 we reboot to hold in bootloader
+                hal.scheduler->reboot(packet.param1 == 3);
+                result = MAV_RESULT_ACCEPTED;
+            }
+            break;
+
+        default:
+                break;
+            }
+
+            mavlink_msg_command_ack_send_buf(
+                msg,
+                chan,
+                packet.command,
+                result);
+
+            break;
+        }
+...
+```
+Till here there is a case implemented with `MAV_CDM` commands. Each case acts in a similar way to the above explained ones. [Here](https://github.com/cvg/px-ros-pkg/blob/master/mavlink/include/mavlink/v1.0/pixhawk/pixhawk.h#L48) you can find the function of each `NAV_CDM`.
+
+```cpp
+    case MAVLINK_MSG_ID_SET_MODE:
+		{
+            // decode
+            mavlink_set_mode_t packet;
+            mavlink_msg_set_mode_decode(msg, &packet);
+
+            if (!(packet.base_mode & MAV_MODE_FLAG_CUSTOM_MODE_ENABLED)) {
+                // we ignore base_mode as there is no sane way to map
+                // from that bitmap to a APM flight mode. We rely on
+                // custom_mode instead.
+                break;
+            }
+            switch (packet.custom_mode) {
+            case MANUAL:
+            case HOLD:
+            case LEARNING:
+            case STEERING:
+            case AUTO:
+            case RTL:
+                set_mode((enum mode)packet.custom_mode);
+                break;
+            }
+
+            break;
+		}
+
+    case MAVLINK_MSG_ID_MISSION_REQUEST_LIST:
+        {
+            handle_mission_request_list(mission, msg);
+            break;
+        }
 
 
+	// XXX read a WP from EEPROM and send it to the GCS
+    case MAVLINK_MSG_ID_MISSION_REQUEST:
+    {
+        handle_mission_request(mission, msg);
+        break;
+    }
+
+
+    case MAVLINK_MSG_ID_MISSION_ACK:
+        {
+            // not used
+            break;
+        }
+
+    case MAVLINK_MSG_ID_PARAM_REQUEST_LIST:
+        {
+            handle_param_request_list(msg);
+            break;
+        }
+
+    case MAVLINK_MSG_ID_PARAM_REQUEST_READ:
+    {
+        handle_param_request_read(msg);
+        break;
+    }
+
+    case MAVLINK_MSG_ID_MISSION_CLEAR_ALL:
+        {
+            handle_mission_clear_all(mission, msg);
+            break;
+        }
+
+    case MAVLINK_MSG_ID_MISSION_SET_CURRENT:
+        {
+            handle_mission_set_current(mission, msg);
+            break;
+        }
+
+    case MAVLINK_MSG_ID_MISSION_COUNT:
+        {
+            handle_mission_count(mission, msg);
+            break;
+        }
+
+    case MAVLINK_MSG_ID_MISSION_WRITE_PARTIAL_LIST:
+    {
+        handle_mission_write_partial_list(mission, msg);
+        break;
+    }
+
+	// XXX receive a WP from GCS and store in EEPROM
+    case MAVLINK_MSG_ID_MISSION_ITEM:
+        {
+            handle_mission_item(msg, mission);
+            break;
+        }
+
+
+    case MAVLINK_MSG_ID_PARAM_SET:
+        {
+            handle_param_set(msg, &DataFlash);
+            break;
+        }
+
+    case MAVLINK_MSG_ID_RC_CHANNELS_OVERRIDE:
+    {
+        // allow override of RC channel values for HIL
+        // or for complete GCS control of switch position
+        // and RC PWM values.
+        if(msg->sysid != g.sysid_my_gcs) break;                         // Only accept control from our gcs
+        mavlink_rc_channels_override_t packet;
+        int16_t v[8];
+        mavlink_msg_rc_channels_override_decode(msg, &packet);
+
+        if (mavlink_check_target(packet.target_system,packet.target_component))
+            break;
+
+        v[0] = packet.chan1_raw;
+        v[1] = packet.chan2_raw;
+        v[2] = packet.chan3_raw;
+        v[3] = packet.chan4_raw;
+        v[4] = packet.chan5_raw;
+        v[5] = packet.chan6_raw;
+        v[6] = packet.chan7_raw;
+        v[7] = packet.chan8_raw;
+
+        hal.rcin->set_overrides(v, 8);
+
+        failsafe.rc_override_timer = millis();
+        failsafe_trigger(FAILSAFE_EVENT_RC, false);
+        break;
+    }
+
+    case MAVLINK_MSG_ID_HEARTBEAT:
+        {
+            // We keep track of the last time we received a heartbeat from our GCS for failsafe purposes
+			if(msg->sysid != g.sysid_my_gcs) break;
+            last_heartbeat_ms = failsafe.rc_override_timer = millis();
+            failsafe_trigger(FAILSAFE_EVENT_GCS, false);
+            break;
+        }
+
+#if HIL_MODE != HIL_MODE_DISABLED
+	case MAVLINK_MSG_ID_HIL_STATE:
+		{
+			mavlink_hil_state_t packet;
+			mavlink_msg_hil_state_decode(msg, &packet);
+
+            // set gps hil sensor
+            Location loc;
+            loc.lat = packet.lat;
+            loc.lng = packet.lon;
+            loc.alt = packet.alt/10;
+            Vector3f vel(packet.vx, packet.vy, packet.vz);
+            vel *= 0.01f;
+
+            gps.setHIL(0, AP_GPS::GPS_OK_FIX_3D,
+                       packet.time_usec/1000,
+                       loc, vel, 10, 0, true);
+
+			// rad/sec
+            Vector3f gyros;
+            gyros.x = packet.rollspeed;
+            gyros.y = packet.pitchspeed;
+            gyros.z = packet.yawspeed;
+
+            // m/s/s
+            Vector3f accels;
+            accels.x = packet.xacc * (GRAVITY_MSS/1000.0f);
+            accels.y = packet.yacc * (GRAVITY_MSS/1000.0f);
+            accels.z = packet.zacc * (GRAVITY_MSS/1000.0f);
+
+            ins.set_gyro(0, gyros);
+
+            ins.set_accel(0, accels);
+            compass.setHIL(packet.roll, packet.pitch, packet.yaw);
+            break;
+		}
+#endif // HIL_MODE
+
+#if CAMERA == ENABLED
+    case MAVLINK_MSG_ID_DIGICAM_CONFIGURE:
+    {
+        camera.configure_msg(msg);
+        break;
+    }
+
+    case MAVLINK_MSG_ID_DIGICAM_CONTROL:
+    {
+        camera.control_msg(msg);
+        break;
+    }
+#endif // CAMERA == ENABLED
+
+#if MOUNT == ENABLED
+    case MAVLINK_MSG_ID_MOUNT_CONFIGURE:
+		{
+			camera_mount.configure_msg(msg);
+			break;
+		}
+
+    case MAVLINK_MSG_ID_MOUNT_CONTROL:
+		{
+			camera_mount.control_msg(msg);
+			break;
+		}
+
+    case MAVLINK_MSG_ID_MOUNT_STATUS:
+		{
+			camera_mount.status_msg(msg, chan);
+			break;
+		}
+#endif // MOUNT == ENABLED
+
+    case MAVLINK_MSG_ID_RADIO:
+    case MAVLINK_MSG_ID_RADIO_STATUS:
+        {
+            handle_radio_status(msg, DataFlash, should_log(MASK_LOG_PM));
+            break;
+        }
+
+    case MAVLINK_MSG_ID_LOG_REQUEST_DATA:
+    case MAVLINK_MSG_ID_LOG_ERASE:
+        in_log_download = true;
+        // fallthru
+    case MAVLINK_MSG_ID_LOG_REQUEST_LIST:
+        if (!in_mavlink_delay) {
+            handle_log_message(msg, DataFlash);
+        }
+        break;
+    case MAVLINK_MSG_ID_LOG_REQUEST_END:
+        in_log_download = false;
+        if (!in_mavlink_delay) {
+            handle_log_message(msg, DataFlash);
+        }
+        break;
+
+#if HAL_CPU_CLASS > HAL_CPU_CLASS_16
+    case MAVLINK_MSG_ID_SERIAL_CONTROL:
+        handle_serial_control(msg, gps);
+        break;
+#endif
+
+    default:
+        // forward unknown messages to the other link if there is one
+        for (uint8_t i=0; i<num_gcs; i++) {
+            if (gcs[i].initialised && i != (uint8_t)chan) {
+                mavlink_channel_t out_chan = (mavlink_channel_t)i;
+                // only forward if it would fit in the transmit buffer
+            if (comm_get_txspace(out_chan) > ((uint16_t)msg->len) + MAVLINK_NUM_NON_PAYLOAD_BYTES) {
+                _mavlink_resend_uart(out_chan, msg);
+            }
+        }
+        }
+        break;
+
+    } // end switch
+} // end handle mavlink
+...
+```
+Each of this `MAVLINK_MSG_ID` has its own `.h`file, where it is defined.
+For example `MAVLINK_MSG_ID_MISSION_ACK`is defined in [mavlink_msg_mission_ack.h](https://github.com/ethz-asl/qgc_asl/blob/master_asl/libs/mavlink/include/mavlink/v1.0/common/mavlink_msg_mission_ack.h) file.
+
+Similarly, the rest are defined in their correponding `.h` file stored at  [/GCS_MAVLink/include/mavlink/v1.0/common](https://github.com/diydrones/ardupilot/tree/master/libraries/GCS_MAVLink/include/mavlink/v1.0/common).
+
+
+```cpp
+/*
+ *  a delay() callback that processes MAVLink packets. We set this as the
+ *  callback in long running library initialisation routines to allow
+ *  MAVLink to process packets while waiting for the initialisation to
+ *  complete
+ */
+static void mavlink_delay_cb()
+{
+    static uint32_t last_1hz, last_50hz, last_5s;
+    if (!gcs[0].initialised || in_mavlink_delay) return;
+
+    in_mavlink_delay = true;
+
+    uint32_t tnow = millis();
+    if (tnow - last_1hz > 1000) {
+        last_1hz = tnow;
+        gcs_send_message(MSG_HEARTBEAT);
+        gcs_send_message(MSG_EXTENDED_STATUS1);
+    }
+    if (tnow - last_50hz > 20) {
+        last_50hz = tnow;
+        gcs_update();
+        gcs_data_stream_send();
+        notify.update();
+    }
+    if (tnow - last_5s > 5000) {
+        last_5s = tnow;
+        gcs_send_text_P(SEVERITY_LOW, PSTR("Initialising APM..."));
+    }
+    check_usb_mux();
+
+    in_mavlink_delay = false;
+}
+...
+```
+
+This slice of code checks the delay in mavlink messages and makes the corresponding GCS updates.
+```cpp
+
+
+/*
+ *  send a message on both GCS links
+ */
+static void gcs_send_message(enum ap_message id)
+{
+    for (uint8_t i=0; i<num_gcs; i++) {
+        if (gcs[i].initialised) {
+            gcs[i].send_message(id);
+        }
+    }
+}
+...
+```
+You can find de `GCS_class` methods definition [here](https://github.com/diydrones/ardupilot/blob/master/libraries/GCS_MAVLink/GCS.h#L64).Note that `gcs` is an instance of `GCS_CLass`:
+`initialised` sets to true if this GCS link is active
+bool initialised.
+`send_message` sends a message with a single numeric parameter.
+
+```cpp
+
+/*
+ *  send data streams in the given rate range on both links
+ */
+static void gcs_data_stream_send(void)
+{
+    for (uint8_t i=0; i<num_gcs; i++) {
+        if (gcs[i].initialised) {
+            gcs[i].data_stream_send();
+        }
+    }
+}
+...
+```
+Here the `data_stream_send()` send streams which match working frequency range.
+
+```cpp
+
+/*
+ *  look for incoming commands on the GCS links
+ */
+static void gcs_update(void)
+{
+    for (uint8_t i=0; i<num_gcs; i++) {
+        if (gcs[i].initialised) {
+#if CLI_ENABLED == ENABLED
+            gcs[i].update(run_cli);
+#else
+            gcs[i].update(NULL);
+#endif
+        }
+    }
+}
+...
+```
+The `update` method updates GCS state. This may involve checking for received bytes on the stream, or sending additional periodic messages.
+
+```cpp
+static void gcs_send_text_P(gcs_severity severity, const prog_char_t *str)
+{
+    for (uint8_t i=0; i<num_gcs; i++) {
+        if (gcs[i].initialised) {
+            gcs[i].send_text_P(severity, str);
+    }
+    }
+#if LOGGING_ENABLED == ENABLED
+    DataFlash.Log_Write_Message_P(str);
+#endif
+}
+...
+```
+The `send_text`method sends a text message.Where the parameters are: severity(a value describing the importance of the message) and	str (the text to be sent).
+```cpp
+
+/*
+ *  send a low priority formatted message to the GCS
+ *  only one fits in the queue, so if you send more than one before the
+ *  last one gets into the serial buffer then the old one will be lost
+ */
+void gcs_send_text_fmt(const prog_char_t *fmt, ...)
+{
+    va_list arg_list;
+    gcs[0].pending_status.severity = (uint8_t)SEVERITY_LOW;
+    va_start(arg_list, fmt);
+    hal.util->vsnprintf_P((char *)gcs[0].pending_status.text,
+            sizeof(gcs[0].pending_status.text), fmt, arg_list);
+    va_end(arg_list);
+#if LOGGING_ENABLED == ENABLED
+    DataFlash.Log_Write_Message(gcs[0].pending_status.text);
+#endif
+    gcs[0].send_message(MSG_STATUSTEXT);
+    for (uint8_t i=1; i<num_gcs; i++) {
+        if (gcs[i].initialised) {
+            gcs[i].pending_status = gcs[0].pending_status;
+            gcs[i].send_message(MSG_STATUSTEXT);
+        }
+    }
+}
+...
+```
+`pending_status`refers to message that are in the queue.This slice of code try to send this pending messages.
+```cpp
+
+/**
+   retry any deferred messages
+ */
+static void gcs_retry_deferred(void)
+{
+    gcs_send_message(MSG_RETRY_DEFERRED);
+}
+```
+This funtions retries sending deferred messages.
