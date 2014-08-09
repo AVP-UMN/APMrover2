@@ -100,5 +100,48 @@ This concep will appear frecuently with dealing with electronic devices.
 ```
 
 Here four types of sensors are configures: barometer, compass data sensor, serial sensor and ins type sensor.
+```cpp
+//////////////////////////////////////////////////////////////////////////////
+// HIL_MODE                                 OPTIONAL
 
-https://github.com/BeaglePilot/ardupilot/blob/master/APMrover2/config.h#L62
+#ifndef HIL_MODE
+ #define HIL_MODE        HIL_MODE_DISABLED
+#endif
+
+#if HIL_MODE != HIL_MODE_DISABLED       // we are in HIL mode
+ #undef CONFIG_BARO
+ #define CONFIG_BARO HAL_BARO_HIL
+ #undef CONFIG_INS_TYPE
+ #define CONFIG_INS_TYPE HAL_INS_HIL
+ #undef  CONFIG_COMPASS
+ #define CONFIG_COMPASS HAL_COMPASS_HIL
+#endif
+
+#if CONFIG_HAL_BOARD == HAL_BOARD_APM1
+# define BATTERY_PIN_1	  0
+# define CURRENT_PIN_1	  1
+#elif CONFIG_HAL_BOARD == HAL_BOARD_APM2
+# define BATTERY_PIN_1	  1
+# define CURRENT_PIN_1	  2
+#elif CONFIG_HAL_BOARD == HAL_BOARD_AVR_SITL
+# define BATTERY_PIN_1	  1
+# define CURRENT_PIN_1	  2
+#elif CONFIG_HAL_BOARD == HAL_BOARD_PX4
+# define BATTERY_PIN_1	  -1
+# define CURRENT_PIN_1	  -1
+#elif CONFIG_HAL_BOARD == HAL_BOARD_FLYMAPLE
+# define BATTERY_PIN_1     20
+# define CURRENT_PIN_1	   19
+#elif CONFIG_HAL_BOARD == HAL_BOARD_LINUX
+# define BATTERY_PIN_1     -1
+# define CURRENT_PIN_1	   -1
+#elif CONFIG_HAL_BOARD == HAL_BOARD_VRBRAIN
+# define BATTERY_PIN_1	  -1
+# define CURRENT_PIN_1	  -1
+#endif
+...
+```
+This slice of code stablish the parameters of the HIL mode (Hardware in the loop), for
+development and testing of embedded real-time complex systems.First check if the HIL mode is enabled and after that defines and initialize the corresponding variables.
+
+https://github.com/BeaglePilot/ardupilot/blob/master/APMrover2/config.h#L101
