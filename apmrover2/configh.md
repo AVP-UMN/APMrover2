@@ -144,4 +144,24 @@ Here four types of sensors are configures: barometer, compass data sensor, seria
 This slice of code stablish the parameters of the HIL mode (Hardware in the loop), for
 development and testing of embedded real-time complex systems.First check if the HIL mode is enabled and after that defines and initialize the corresponding variables.
 
-https://github.com/BeaglePilot/ardupilot/blob/master/APMrover2/config.h#L101
+For example deactivate the `CONFIG_BARO` and enables the `CONFIG_BARO HAL_BARO_HIL`, which is used in the HIL mode.
+
+Also defines the battery and input pins, depending on the type of board.
+
+```cpp
+
+//////////////////////////////////////////////////////////////////////////////
+// HIL_MODE                                 OPTIONAL
+
+#ifndef HIL_MODE
+#define HIL_MODE	HIL_MODE_DISABLED
+#endif
+
+#ifndef MAV_SYSTEM_ID
+# define MAV_SYSTEM_ID		1
+#endif
+...
+```
+
+This configuration opf the HIL mode is optional and stablish the `MAV_SYSTEM_ID`.
+```cpp
