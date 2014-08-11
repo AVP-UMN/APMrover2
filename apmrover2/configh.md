@@ -11,7 +11,7 @@ So the `APM_Config.h` funtion is to deal with your parameters and configuration 
 On the other hand, `Config.h` contains default and automatic configuration details. As you will see there are many warnings alont the file to avoid changes that can lead to desconfiguration.
 
 ###Config.h
-
+It is important to do a `Config.h`analysis, because here you can find all the variables initialization value.From these init-values you can extract how they should advance/change.
 The [Config.h](https://github.com/BeaglePilot/ardupilot/blob/master/APMrover2/config.h) defines default configuration so, as you can see, it starts with a warning:
 
 ```cpp
@@ -323,3 +323,171 @@ This slice of code defines and initialize the delay in 0 ms.
 Here the `MOUNT`and the `CAMERA` are enabled, in case they are defined (it means they exist/are connected).
 
 ```cpp
+
+/////////////////////////////////////////////////////////////////////////////
+// AIRSPEED_CRUISE
+//
+#ifndef SPEED_CRUISE
+# define SPEED_CRUISE		3 // 3 m/s
+#endif
+
+#ifndef GSBOOST
+# define GSBOOST		0
+#endif
+#ifndef GSBOOST
+# define GSBOOST		0
+#endif
+#ifndef NUDGE_OFFSET
+# define NUDGE_OFFSET		0
+#endif
+
+#ifndef E_GLIDER
+# define E_GLIDER		ENABLED
+#endif
+
+#ifndef TURN_GAIN
+# define TURN_GAIN		5
+#endif
+...
+```
+This slice of code stablish the value of the variables related to the measure of the air-speed.
+
+```cpp
+//////////////////////////////////////////////////////////////////////////////
+// Servo Mapping
+//
+#ifndef THROTTLE_MIN
+# define THROTTLE_MIN			0 // percent
+#endif
+#ifndef THROTTLE_CRUISE
+# define THROTTLE_CRUISE		45
+#endif
+#ifndef THROTTLE_MAX
+# define THROTTLE_MAX			100
+#endif
+...
+```
+This slice of code defines the min, max and cruise values for the throttle.
+
+```cpp
+
+//////////////////////////////////////////////////////////////////////////////
+// Attitude control gains
+//
+#ifndef SERVO_STEER_P
+# define SERVO_STEER_P         0.4
+#endif
+#ifndef SERVO_STEER_I
+# define SERVO_STEER_I         0.0
+#endif
+#ifndef SERVO_STEER_D
+# define SERVO_STEER_D         0.0
+#endif
+#ifndef SERVO_STEER_INT_MAX
+# define SERVO_STEER_INT_MAX   5
+#endif
+#define SERVO_STEER_INT_MAX_CENTIDEGREE SERVO_STEER_INT_MAX*100
+
+...
+```
+Here the gains when controlling the attitude are stablished.
+
+```cpp
+
+//////////////////////////////////////////////////////////////////////////////
+// Crosstrack compensation
+//
+#ifndef XTRACK_GAIN
+# define XTRACK_GAIN          1 // deg/m
+#endif
+#ifndef XTRACK_ENTRY_ANGLE
+# define XTRACK_ENTRY_ANGLE   50 // deg
+#endif
+# define XTRACK_GAIN_SCALED XTRACK_GAIN*100
+# define XTRACK_ENTRY_ANGLE_CENTIDEGREE XTRACK_ENTRY_ANGLE*100
+...
+```
+This slice of code stablish the angular gain and the entry angle for cosstrack compensation.
+
+```cpp
+
+//////////////////////////////////////////////////////////////////////////////
+// Dataflash logging control
+//
+#ifndef LOGGING_ENABLED
+# define LOGGING_ENABLED		ENABLED
+#endif
+
+#if CONFIG_HAL_BOARD == HAL_BOARD_APM1 || CONFIG_HAL_BOARD == HAL_BOARD_APM2
+#define DEFAULT_LOG_BITMASK     \
+    MASK_LOG_ATTITUDE_MED | \
+    MASK_LOG_GPS | \
+    MASK_LOG_PM | \
+    MASK_LOG_CTUN | \
+    MASK_LOG_NTUN | \
+    MASK_LOG_MODE | \
+    MASK_LOG_CMD | \
+    MASK_LOG_SONAR | \
+    MASK_LOG_COMPASS | \
+    MASK_LOG_CURRENT | \
+    MASK_LOG_STEERING | \
+    MASK_LOG_CAMERA
+#else
+// other systems have plenty of space for full logs
+#define DEFAULT_LOG_BITMASK   0xffff
+#endif
+...
+```
+
+This slice of code enables the logging to the Dataflash and if the board is one of the specified, then defines default logs.
+```cpp
+//////////////////////////////////////////////////////////////////////////////
+// Developer Items
+//
+
+#ifndef STANDARD_SPEED
+# define STANDARD_SPEED		3.0
+#define STANDARD_SPEED_SQUARED (STANDARD_SPEED * STANDARD_SPEED)
+#endif
+#define STANDARD_THROTTLE_SQUARED (THROTTLE_CRUISE * THROTTLE_CRUISE)
+
+// use this to enable servos in HIL mode
+#ifndef HIL_SERVOS
+# define HIL_SERVOS DISABLED
+#endif
+
+// use this to completely disable the CLI
+#ifndef CLI_ENABLED
+# define CLI_ENABLED ENABLED
+#endif
+
+// if RESET_SWITCH_CH is not zero, then this is the PWM value on
+// that channel where we reset the control mode to the current switch
+// position (to for example return to switched mode after failsafe or
+// fence breach)
+#ifndef RESET_SWITCH_CHAN_PWM
+# define RESET_SWITCH_CHAN_PWM 1750
+#endif
+
+#ifndef BOOSTER
+# define BOOSTER              2    // booster factor x1 = 1 or x2 = 2
+#endif
+
+#ifndef SONAR_ENABLED
+# define SONAR_ENABLED       DISABLED
+#endif
+
+/*
+  build a firmware version string.
+  GIT_VERSION comes from Makefile builds
+*/
+#ifndef GIT_VERSION
+#define FIRMWARE_STRING THISFIRMWARE
+#else
+#define FIRMWARE_STRING THISFIRMWARE " (" GIT_VERSION ")"
+#endif
+```
+
+
+This slice of code, first defines the standard speed values, then the HIL MODE servos,then enables the command line (CMI), enables the sonar and the filmeware.Also, implements a `RESET_SWITCH` function for reseting the control mode to the current switch position.
+
