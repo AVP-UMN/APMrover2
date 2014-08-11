@@ -165,3 +165,161 @@ Also defines the battery and input pins, depending on the type of board.
 
 This configuration opf the HIL mode is optional and stablish the `MAV_SYSTEM_ID`.
 ```cpp
+
+//////////////////////////////////////////////////////////////////////////////
+// Serial port speeds.
+//
+#ifndef SERIAL0_BAUD
+# define SERIAL0_BAUD			115200
+#endif
+#ifndef SERIAL1_BAUD
+# define SERIAL1_BAUD			 57600
+#endif
+#ifndef SERIAL2_BAUD
+# define SERIAL2_BAUD			 57600
+#endif
+
+#ifndef CH7_OPTION
+# define CH7_OPTION		          CH7_SAVE_WP
+#endif
+
+#ifndef TUNING_OPTION
+# define TUNING_OPTION		          TUN_NONE
+#endif
+
+...
+```
+Here the serial ports speed is stablished through the number of bauds.Baud is the unit of symbol rate, also known as baud or modulation rate; the number of distinct symbol changes (signaling events) made to the transmission medium per second in a digitally modulated signal or a line code.
+```cpp
+//////////////////////////////////////////////////////////////////////////////
+// INPUT_VOLTAGE
+//
+#ifndef INPUT_VOLTAGE
+# define INPUT_VOLTAGE			4.68	//  4.68 is the average value for a sample set.  This is the value at the processor with 5.02 applied at the servo rail
+#endif
+...
+```
+This slice of code defines the `INPUT_VOLTAGE`for making it work.
+
+```cpp
+//////////////////////////////////////////////////////////////////////////////
+//  MAGNETOMETER
+#ifndef MAGNETOMETER
+# define MAGNETOMETER			ENABLED
+#endif
+
+...
+```
+`MAGNETOMETER`is enabled here fot its later use in other code files.
+```cpp
+
+//////////////////////////////////////////////////////////////////////////////
+// MODE
+// MODE_CHANNEL
+//
+#ifndef MODE_CHANNEL
+# define MODE_CHANNEL	8
+#endif
+#if (MODE_CHANNEL != 5) && (MODE_CHANNEL != 6) && (MODE_CHANNEL != 7) && (MODE_CHANNEL != 8)
+# error XXX
+# error XXX You must set MODE_CHANNEL to 5, 6, 7 or 8
+# error XXX
+#endif
+
+#if !defined(MODE_1)
+# define MODE_1			LEARNING
+#endif
+#if !defined(MODE_2)
+# define MODE_2			LEARNING
+#endif
+#if !defined(MODE_3)
+# define MODE_3			LEARNING
+#endif
+#if !defined(MODE_4)
+# define MODE_4			LEARNING
+#endif
+#if !defined(MODE_5)
+# define MODE_5			LEARNING
+#endif
+#if !defined(MODE_6)
+# define MODE_6			MANUAL
+#endif
+...
+```
+This slice of code defines six modes for channel input/output.The first 5th are `LEARNING`modes, whilehe 6th one is `MANUAL`.
+
+```cpp
+//////////////////////////////////////////////////////////////////////////////
+// failsafe defaults
+#ifndef THROTTLE_FAILSAFE
+# define THROTTLE_FAILSAFE		ENABLED
+#endif
+#ifndef THROTTLE_FS_VALUE
+# define THROTTLE_FS_VALUE		950
+#endif
+#ifndef LONG_FAILSAFE_ACTION
+# define LONG_FAILSAFE_ACTION		0
+#endif
+#ifndef GCS_HEARTBEAT_FAILSAFE
+# define GCS_HEARTBEAT_FAILSAFE		DISABLED
+#endif
+
+
+///////////////////
+...
+```
+The failsafe default events configuration is made here.For example defines and enables the `THROTTLE_FAILSAFE` in case the there is any problem with the throttle.
+```cpp
+//////////////////////////////////////////////////////////////////////////////
+// THROTTLE_OUT
+//
+#ifndef THROTTLE_OUT
+# define THROTTLE_OUT			ENABLED
+#endif
+...
+```
+Here the `THROTTLE_OUT`is defined and enabled.
+```cpp
+
+
+//////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
+// STARTUP BEHAVIOUR
+//////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
+
+```
+Now  comes the `STARTUP BEHAVIOUR` configuration.
+
+```cpp
+
+//////////////////////////////////////////////////////////////////////////////
+// GROUND_START_DELAY
+//
+#ifndef GROUND_START_DELAY
+# define GROUND_START_DELAY		0
+#endif
+...
+```
+This slice of code defines and initialize the delay in 0 ms.
+
+```cpp
+//////////////////////////////////////////////////////////////////////////////
+// MOUNT (ANTENNA OR CAMERA)
+//
+#ifndef MOUNT
+# define MOUNT		ENABLED
+#endif
+
+//////////////////////////////////////////////////////////////////////////////
+// CAMERA control
+//
+#ifndef CAMERA
+# define CAMERA ENABLED
+#endif
+
+...
+```
+Here the `MOUNT`and the `CAMERA` are enabled, in case they are defined (it means they exist/are connected).
+
+```cpp
