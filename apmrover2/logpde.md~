@@ -1,0 +1,136 @@
+# Log.pde
+
+The [Log.pde](https://github.com/BeaglePilot/ardupilot/blob/master/APMrover2/Log.pde) file contains functions for writing and reading packets from DataFlash log memory.Also, allows the user to dump or erase logs.
+```cpp
+// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
+
+#if LOGGING_ENABLED == ENABLED
+
+// Code to Write and Read packets from DataFlash log memory
+// Code to interact with the user to dump or erase logs
+...
+```
+Check if `LOGGING_ENABLE`is already working.
+```cpp
+// These are function definitions so the Menu can be constructed before the functions
+// are defined below. Order matters to the compiler.
+static int8_t	dump_log(uint8_t argc, 			const Menu::arg *argv);
+static int8_t	erase_logs(uint8_t argc, 		const Menu::arg *argv);
+static int8_t	select_logs(uint8_t argc, 		const Menu::arg *argv);
+...
+```
+ Here you can find `dump_log`, `erase_log`and `select_logs` functions definitions.They are defined here to let the Menu be constructed.
+ ```cpp
+ // Creates a constant array of structs representing menu options
+// and stores them in Flash memory, not RAM.
+// User enters the string in the console to call the functions on the right.
+// See class Menu in AP_Common for implementation details
+static const struct Menu::command log_menu_commands[] PROGMEM = {
+	{"dump",	dump_log},
+	{"erase",	erase_logs},
+	{"enable",	select_logs},
+	{"disable",	select_logs}
+};
+...
+```
+Here the menu is created as a array of structs.The strings between quotes represent the options in the menu.In [AP_Common](https://github.com/BeaglePilot/ardupilot/blob/master/libraries/AP_Common/AP_Common.h) library you will find more about menu class.
+
+####HERE
+
+``` cpp
+static int8_t
+erase_logs(uint8_t argc, const Menu::arg *argv)
+{
+    in_mavlink_delay = true;
+    do_erase_logs();
+    in_mavlink_delay = false;
+    return 0;
+}
+...
+```
+This funtion calls the previously defined function `do_erase_logs`in case the mavlink messages are dalayed (`in_mavlink_delay` value is true).
+
+```cpp
+static int8_t
+select_logs(uint8_t argc, const Menu::arg *argv)
+{
+	uint16_t	bits;
+
+	if (argc != 2) {
+		cliSerial->printf_P(PSTR("missing log type\n"));
+		return(-1);
+	}
+
+	bits = 0;
+
+	// Macro to make the following code a bit easier on the eye.
+	// Pass it the capitalised name of the log option, as defined
+	// in defines.h but without the LOG_ prefix.  It will check for
+	// that name as the argument to the command, and set the bit in
+	// bits accordingly.
+	//
+	if (!strcasecmp_P(argv[1].str, PSTR("all"))) {
+		bits = ~0;
+	} else {
+		#define TARG(_s)	if (!strcasecmp_P(argv[1].str, PSTR(#_s))) bits |= MASK_LOG_ ## _s
+		TARG(ATTITUDE_FAST);
+		TARG(ATTITUDE_MED);
+		TARG(GPS);
+		TARG(PM);
+		TARG(CTUN);
+		TARG(NTUN);
+		TARG(MODE);
+		TARG(IMU);
+		TARG(CMD);
+		TARG(CURRENT);
+		TARG(SONAR);
+		TARG(COMPASS);
+		TARG(CAMERA);
+		TARG(STEERING);
+		#undef TARG
+	}
+
+	if (!strcasecmp_P(argv[0].str, PSTR("enable"))) {
+		g.log_bitmask.set_and_save(g.log_bitmask | bits);
+	}else{
+		g.log_bitmask.set_and_save(g.log_bitmask & ~bits);
+	}
+	return(0);
+}
+...
+```
+ This function first check if the value of `argc` isdifferent from 2, in that case prints a missing log type.After that calls the macro defined above. Then checks if `PSTR` is enabled and in that case set and save the logs.
+
+``` cpp
+
+process_logs(uint8_t argc, const Menu::arg *argv)
+{
+	log_menu.run();
+	return 0;
+}
+...
+
+```
+`process_logs` funtion runs the menu defined above.
+
+```cpp
+struct PACKED log_Performance {
+    LOG_PACKET_HEADER;
+    uint32_t time_ms;
+    uint32_t loop_time;
+    uint16_t main_loop_count;
+    uint32_t g_dt_max;
+    int16_t  gyro_drift_x;
+    int16_t  gyro_drift_y;
+    int16_t  gyro_drift_z;
+    uint8_t  i2c_lockup_count;
+    uint16_t ins_error_count;
+};
+...
+```
+
+This struct contains definitions of variables that will be used when working with logs.
+
+``cpp
+
+
