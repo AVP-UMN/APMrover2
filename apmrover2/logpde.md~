@@ -131,6 +131,102 @@ struct PACKED log_Performance {
 
 This struct contains definitions of variables that will be used when working with logs.
 
-``cpp
+```cpp
+// Write a performance monitoring packet. Total length : 19 bytes
+static void Log_Write_Performance()
+{
+    struct log_Performance pkt = {
+        LOG_PACKET_HEADER_INIT(LOG_PERFORMANCE_MSG),
+        time_ms         : millis(),
+        loop_time       : millis()- perf_mon_timer,
+        main_loop_count : mainLoop_count,
+        g_dt_max        : G_Dt_max,
+        gyro_drift_x    : (int16_t)(ahrs.get_gyro_drift().x * 1000),
+        gyro_drift_y    : (int16_t)(ahrs.get_gyro_drift().y * 1000),
+        gyro_drift_z    : (int16_t)(ahrs.get_gyro_drift().z * 1000),
+        i2c_lockup_count: hal.i2c->lockup_count(),
+        ins_error_count  : ins.error_count()
+    };
+    DataFlash.WriteBlock(&pkt, sizeof(pkt));
+}
+...
+```
+The function  `Log_Write_Performance()`contains the implementations of the `Log_Performance` struct defined above.For example the function `time_ms` should call another function `millis` which change units from micro to mili seconds(As comented in other sections).
 
+```cpp
+
+// Write a mission command. Total length : 36 bytes
+static void Log_Write_Cmd(const AP_Mission::Mission_Command &cmd)
+{
+    mavlink_mission_item_t mav_cmd = {};
+    AP_Mission::mission_cmd_to_mavlink(cmd,mav_cmd);
+    DataFlash.Log_Write_MavCmd(mission.num_commands(),mav_cmd);
+}
+...
+```
+
+This functions defines a [AP_Mission Class](https://github.com/diydrones/ardupilot/blob/master/libraries/AP_Mission/AP_Mission.h#L43) function and after that writes the logs using Dataflah function [Log_Write_MavCMd](https://github.com/diydrones/ardupilot/blob/master/libraries/DataFlash/DataFlash.h#L69), defines as: `  void Log_Write_MavCmd(uint16_t cmd_total, const mavlink_mission_item_t& mav_cmd);`
+```cpp
+struct PACKED log_Steering {
+    LOG_PACKET_HEADER;
+    uint32_t time_ms;
+    float demanded_accel;
+    float achieved_accel;
+};
+...
+```
+
+
+```cpp
+// Write a steering packet
+static void Log_Write_Steering()
+{
+    struct log_Steering pkt = {
+        LOG_PACKET_HEADER_INIT(LOG_STEERING_MSG),
+        time_ms        : hal.scheduler->millis(),
+        demanded_accel : lateral_acceleration,
+        achieved_accel : gps.ground_speed() * ins.get_gyro().z,
+    };
+    DataFlash.WriteBlock(&pkt, sizeof(pkt));
+}
+...
+```
+This slice of code, first defines a packet called `Log_Steering` containing implementations of functions. Then calls ` WriteBlock` Datafhash function  for writing the info in the packet. 
+
+```cpp
+
+struct PACKED log_Startup {
+    LOG_PACKET_HEADER;
+    uint32_t time_ms;
+    uint8_t startup_type;
+    uint16_t command_total;
+};
+...
+```
+
+`Log_Startup` struc is defined here.This struc will be use in the next function implementation.
+
+```cpp
+static void Log_Write_Startup(uint8_t type)
+{
+    struct log_Startup pkt = {
+        LOG_PACKET_HEADER_INIT(LOG_STARTUP_MSG),
+        time_ms         : millis(),
+        startup_type    : type,
+        command_total   : mission.num_commands()
+    };
+    DataFlash.WriteBlock(&pkt, sizeof(pkt));
+
+    // write all commands to the dataflash as well
+    AP_Mission::Mission_Command cmd;
+    for (uint16_t i = 0; i < mission.num_commands(); i++) {
+        if(mission.read_cmd_from_storage(i,cmd)) {
+            Log_Write_Cmd(cmd);
+        }
+    }
+}
+...
+```
+
+`Log_Write_Startup`
 
