@@ -6,4 +6,6 @@
    * [GCS_Mavlink.pde](apmrover2/gcs_mavlinkpde.md)
    * [Config.h](apmrover2/configh.md)
    * [Log.pde](apmrover2/logpde.md)
+   * [Parameters](apmrover2/parameters.md)
+   * [Other files](apmrover2/other_files.md)
 
