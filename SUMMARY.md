@@ -9,5 +9,6 @@
    * [Parameters](apmrover2/parameters.md)
        * [Parameters.h](apmrover2/parametersh.md)
        * [Parameters.pde](apmrover2/parameterspde.md)
+   * [Steering.pde](apmrover2/steeringpde.md)
    * [Other files](apmrover2/other_files.md)
 
