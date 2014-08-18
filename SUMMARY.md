@@ -7,5 +7,7 @@
    * [Config.h](apmrover2/configh.md)
    * [Log.pde](apmrover2/logpde.md)
    * [Parameters](apmrover2/parameters.md)
+       * [Parameters.h](apmrover2/parametersh.md)
+       * [Parameters.pde](apmrover2/parameterspde.md)
    * [Other files](apmrover2/other_files.md)
 
