@@ -172,7 +172,65 @@ static void calc_throttle(float target_speed)
 }
 ...
 ```
-This function `calc_throttle` calculates  the throtte for auto-throttle modes.First if `auto_check_trigger()`is not enabled then get the minimun value for throttle. Then `throttle_base`and `throttle_target` varibles are updated to throttle medium values.Also calculates the turning rate and stores it in `steer_rate`.Then defines ` turn_angle` ,` speed_turn_ratio`and  ` speed_turn_reduction`for controlling the angle, ratio and speed when turning.
+This function `calc_throttle` calculates  the throttel for auto-throttle modes.First if `auto_check_trigger()`is not enabled then get the minimun value for throttle. Then `throttle_base`and `throttle_target` varibles are updated to throttle medium values.Also calculates the turning rate and stores it in `steer_rate`.Then defines ` turn_angle` ,` speed_turn_ratio`and  ` speed_turn_reduction`for controlling the angle, ratio and speed when turning.
 When the mode is AUTO and the drone is aproaching to the turn point the `reduction`is aplied to its `target_speed`.This also changes the values of `groundspeed_error`and throttle, which are reduced by the reduction factor.If `in_reverse`is detected means that the user has asked to use reverse throttle to brake.Then, aplplies it in proportion to the ground speed error, but only when our ground speed error is more than `braking_speeder`.
 
-https://github.com/BeaglePilot/ardupilot/blob/master/APMrover2/Steering.pde#L158
+```cpp
+/*****************************************
+ * Calculate desired turn angles (in medium freq loop)
+ *****************************************/
+
+static void calc_lateral_acceleration()
+{
+    switch (control_mode) {
+    case AUTO:
+        nav_controller->update_waypoint(prev_WP, next_WP);
+        break;
+
+    case RTL:
+    case GUIDED:
+    case STEERING:
+        nav_controller->update_waypoint(current_loc, next_WP);
+        break;
+    default:
+        return;
+    }
+
+	// Calculate the required turn of the wheels
+
+    // negative error = left turn
+	// positive error = right turn
+    lateral_acceleration = nav_controller->lateral_acceleration();
+    if (use_pivot_steering()) {
+        int16_t bearing_error = wrap_180_cd(nav_controller->target_bearing_cd() - ahrs.yaw_sensor) / 100;
+        if (bearing_error > 0) {
+            lateral_acceleration = g.turn_max_g*GRAVITY_MSS;
+        } else {
+            lateral_acceleration = -g.turn_max_g*GRAVITY_MSS;
+        }
+    }
+}
+...
+```
+Here the desired turn angles are goint to be calculated. For this purpouse, first of all the lateral acceleration is calculated through `cal_lateral_acceleration`.First a case, showing the possible modes is implemented.The current lateral acceleration is meassured and stored in `nav_controller->lateral_acceleration()`variable. If pivot steering is being used, then `bearing_error`is calculated in the same way as above mentioned. If this error is positive the needed `lateral_acceleration`will be positive if not negative.
+
+```cpp
+/*
+  calculate steering angle given lateral_acceleration
+ */
+static void calc_nav_steer()
+{
+    // add in obstacle avoidance
+    lateral_acceleration += (obstacle.turn_angle/45.0f) * g.turn_max_g;
+
+    // constrain to max G force
+    lateral_acceleration = constrain_float(lateral_acceleration, -g.turn_max_g*GRAVITY_MSS, g.turn_max_g*GRAVITY_MSS);
+
+    channel_steer->servo_out = steerController.get_steering_out_lat_accel(lateral_acceleration);
+}
+...
+```
+After calculatint the lateral acceleration, we need to calculate the steering angle.`lateral_acceleration` is updated with the obstacle avoidance value.Then the maximun gravity force is taken into account before passing the `lateral_acceleration` to the `steerController.get_steering_out_lat_accel`function.
+
+https://github.com/BeaglePilot/ardupilot/blob/master/APMrover2/Steering.pde#L207
+
