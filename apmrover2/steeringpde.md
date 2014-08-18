@@ -232,5 +232,78 @@ static void calc_nav_steer()
 ```
 After calculatint the lateral acceleration, we need to calculate the steering angle.`lateral_acceleration` is updated with the obstacle avoidance value.Then the maximun gravity force is taken into account before passing the `lateral_acceleration` to the `steerController.get_steering_out_lat_accel`function.
 
-https://github.com/BeaglePilot/ardupilot/blob/master/APMrover2/Steering.pde#L207
+```cpp
+/*****************************************
+* Set the flight control servos based on the current calculated values
+*****************************************/
+static void set_servos(void)
+{
+    int16_t last_throttle = channel_throttle->radio_out;
+
+    // support a separate steering channel
+    RC_Channel_aux::set_servo_out(RC_Channel_aux::k_steering, channel_steer->pwm_to_angle_dz(0));
+
+	if ((control_mode == MANUAL || control_mode == LEARNING) &&
+        (g.skid_steer_out == g.skid_steer_in)) {
+        // do a direct pass through of radio values
+        channel_steer->radio_out       = channel_steer->read();
+        channel_throttle->radio_out    = channel_throttle->read();
+        if (failsafe.bits & FAILSAFE_EVENT_THROTTLE) {
+            // suppress throttle if in failsafe and manual
+            channel_throttle->radio_out = channel_throttle->radio_trim;
+        }
+	} else {
+        channel_steer->calc_pwm();
+        if (in_reverse) {
+            channel_throttle->servo_out = constrain_int16(channel_throttle->servo_out,
+                                                          -g.throttle_max,
+                                                          -g.throttle_min);
+        } else {
+            channel_throttle->servo_out = constrain_int16(channel_throttle->servo_out,
+                                                          g.throttle_min.get(),
+                                                          g.throttle_max.get());
+        }
+
+        if ((failsafe.bits & FAILSAFE_EVENT_THROTTLE) && control_mode < AUTO) {
+            // suppress throttle if in failsafe
+            channel_throttle->servo_out = 0;
+        }
+
+        // convert 0 to 100% into PWM
+        channel_throttle->calc_pwm();
+
+        // limit throttle movement speed
+        throttle_slew_limit(last_throttle);
+
+        if (g.skid_steer_out) {
+            // convert the two radio_out values to skid steering values
+            /*
+              mixing rule:
+              steering = motor1 - motor2
+              throttle = 0.5*(motor1 + motor2)
+              motor1 = throttle + 0.5*steering
+              motor2 = throttle - 0.5*steering
+            */
+            float steering_scaled = channel_steer->norm_output();
+            float throttle_scaled = channel_throttle->norm_output();
+            float motor1 = throttle_scaled + 0.5*steering_scaled;
+            float motor2 = throttle_scaled - 0.5*steering_scaled;
+            channel_steer->servo_out = 4500*motor1;
+            channel_throttle->servo_out = 100*motor2;
+            channel_steer->calc_pwm();
+            channel_throttle->calc_pwm();
+        }
+    }
+
+
+#if HIL_MODE == HIL_MODE_DISABLED || HIL_SERVOS
+	// send values to the PWM timers for output
+	// ----------------------------------------
+    channel_steer->output();
+    channel_throttle->output();
+    RC_Channel_aux::output_ch_all();
+#endif
+}
+```
+The last step consist on setting the flight control servos based on the current calculated values.An auxiliar channel is stablished for steering.If the mode is MANUAL or LEARNING the values are passed through of radio values.The throttle is suspended if failsafe.`servo_out`values are updated depending if `in_reverse`is enabled or not.After all this, the two `radio_out` values are converted to skid steering values.Last, if HIL_MODE is disabled the values are sent to the PWM timers for output.
 
