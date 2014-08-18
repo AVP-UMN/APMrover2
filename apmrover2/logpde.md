@@ -334,4 +334,364 @@ struct PACKED log_Control_Tuning {
 ```
 Here the `log_control_Tuning` struct is defined.
 
-https://github.com/BeaglePilot/ardupilot/blob/master/APMrover2/Log.pde#L260
+```cpp
+// Write a control tuning packet. Total length : 22 bytes
+static void Log_Write_Control_Tuning()
+{
+    Vector3f accel = ins.get_accel();
+    struct log_Control_Tuning pkt = {
+        LOG_PACKET_HEADER_INIT(LOG_CTUN_MSG),
+        time_ms         : millis(),
+        steer_out       : (int16_t)channel_steer->servo_out,
+        roll            : (int16_t)ahrs.roll_sensor,
+        pitch           : (int16_t)ahrs.pitch_sensor,
+        throttle_out    : (int16_t)channel_throttle->servo_out,
+        accel_y         : accel.y
+    };
+    DataFlash.WriteBlock(&pkt, sizeof(pkt));
+}
+...
+```
+After definingthe `log_control_Tuning`struct  he fuction defined above write one of those packets.
+
+```cpp
+struct PACKED log_Nav_Tuning {
+    LOG_PACKET_HEADER;
+    uint32_t time_ms;
+    uint16_t yaw;
+    float    wp_distance;
+    uint16_t target_bearing_cd;
+    uint16_t nav_bearing_cd;
+    int8_t   throttle;
+};
+...
+```
+The `log_Nav_Tuning`struct is defined. This struct contains variables for synchronizing the position, distances... when using `AP_Navigation` functions.
+
+```cpp
+
+// Write a navigation tuning packet. Total length : 18 bytes
+static void Log_Write_Nav_Tuning()
+{
+    struct log_Nav_Tuning pkt = {
+        LOG_PACKET_HEADER_INIT(LOG_NTUN_MSG),
+        time_ms             : millis(),
+        yaw                 : (uint16_t)ahrs.yaw_sensor,
+        wp_distance         : wp_distance,
+        target_bearing_cd   : (uint16_t)nav_controller->target_bearing_cd(),
+        nav_bearing_cd      : (uint16_t)nav_controller->nav_bearing_cd(),
+        throttle            : (int8_t)(100 * channel_throttle->norm_output())
+    };
+    DataFlash.WriteBlock(&pkt, sizeof(pkt));
+}
+...
+```
+The funtion `Log_Nav_Tuning`writes a packet as defined above.
+
+```cpp
+struct PACKED log_Attitude {
+    LOG_PACKET_HEADER;
+    uint32_t time_ms;
+    int16_t roll;
+    int16_t pitch;
+    uint16_t yaw;
+};
+
+
+// Write an attitude packet
+static void Log_Write_Attitude()
+{
+    struct log_Attitude pkt = {
+        LOG_PACKET_HEADER_INIT(LOG_ATTITUDE_MSG),
+        time_ms : millis(),
+        roll    : (int16_t)ahrs.roll_sensor,
+        pitch   : (int16_t)ahrs.pitch_sensor,
+        yaw     : (uint16_t)ahrs.yaw_sensor
+    };
+    DataFlash.WriteBlock(&pkt, sizeof(pkt));
+#if AP_AHRS_NAVEKF_AVAILABLE
+    DataFlash.Log_Write_EKF(ahrs);
+    DataFlash.Log_Write_AHRS2(ahrs);
+#endif
+}
+
+struct PACKED log_Mode {
+    LOG_PACKET_HEADER;
+    uint32_t time_ms;
+    uint8_t mode;
+    uint8_t mode_num;
+};
+
+// Write a mode packet
+static void Log_Write_Mode()
+{
+    struct log_Mode pkt = {
+        LOG_PACKET_HEADER_INIT(LOG_MODE_MSG),
+        time_ms         : millis(),
+        mode            : (uint8_t)control_mode,
+        mode_num        : (uint8_t)control_mode
+    };
+    DataFlash.WriteBlock(&pkt, sizeof(pkt));
+}
+
+
+struct PACKED log_Sonar {
+    LOG_PACKET_HEADER;
+    uint32_t time_ms;
+    float    lateral_accel;
+    uint16_t sonar1_distance;
+    uint16_t sonar2_distance;
+    uint16_t detected_count;
+    int8_t   turn_angle;
+    uint16_t turn_time;
+    uint16_t ground_speed;
+    int8_t   throttle;
+};
+
+// Write a sonar packet
+static void Log_Write_Sonar()
+{
+    uint16_t turn_time = 0;
+    if (obstacle.turn_angle != 0) {
+        turn_time = hal.scheduler->millis() - obstacle.detected_time_ms;
+    }
+    struct log_Sonar pkt = {
+        LOG_PACKET_HEADER_INIT(LOG_SONAR_MSG),
+        time_ms         : millis(),
+        lateral_accel   : lateral_acceleration,
+        sonar1_distance : (uint16_t)sonar.distance_cm(0),
+        sonar2_distance : (uint16_t)sonar.distance_cm(1),
+        detected_count  : obstacle.detected_count,
+        turn_angle      : (int8_t)obstacle.turn_angle,
+        turn_time       : turn_time,
+        ground_speed    : (uint16_t)(ground_speed*100),
+        throttle        : (int8_t)(100 * channel_throttle->norm_output())
+    };
+    DataFlash.WriteBlock(&pkt, sizeof(pkt));
+}
+
+struct PACKED log_Current {
+    LOG_PACKET_HEADER;
+    uint32_t time_ms;
+    int16_t throttle_in;
+    int16_t battery_voltage;
+    int16_t current_amps;
+    uint16_t board_voltage;
+    float   current_total;
+};
+
+static void Log_Write_Current()
+{
+    struct log_Current pkt = {
+        LOG_PACKET_HEADER_INIT(LOG_CURRENT_MSG),
+        time_ms                 : millis(),
+        throttle_in             : channel_throttle->control_in,
+        battery_voltage         : (int16_t)(battery.voltage() * 100.0),
+        current_amps            : (int16_t)(battery.current_amps() * 100.0),
+        board_voltage           : (uint16_t)(hal.analogin->board_voltage()*1000),
+        current_total           : battery.current_total_mah()
+    };
+    DataFlash.WriteBlock(&pkt, sizeof(pkt));
+
+    // also write power status
+    DataFlash.Log_Write_Power();
+}
+
+struct PACKED log_Compass {
+    LOG_PACKET_HEADER;
+    uint32_t time_ms;
+    int16_t mag_x;
+    int16_t mag_y;
+    int16_t mag_z;
+    int16_t offset_x;
+    int16_t offset_y;
+    int16_t offset_z;
+    int16_t motor_offset_x;
+    int16_t motor_offset_y;
+    int16_t motor_offset_z;
+};
+
+// Write a Compass packet. Total length : 15 bytes
+static void Log_Write_Compass()
+{
+    const Vector3f &mag_offsets = compass.get_offsets();
+    const Vector3f &mag_motor_offsets = compass.get_motor_offsets();
+    const Vector3f &mag = compass.get_field();
+    struct log_Compass pkt = {
+        LOG_PACKET_HEADER_INIT(LOG_COMPASS_MSG),
+        time_ms         : millis(),
+        mag_x           : (int16_t)mag.x,
+        mag_y           : (int16_t)mag.y,
+        mag_z           : (int16_t)mag.z,
+        offset_x        : (int16_t)mag_offsets.x,
+        offset_y        : (int16_t)mag_offsets.y,
+        offset_z        : (int16_t)mag_offsets.z,
+        motor_offset_x  : (int16_t)mag_motor_offsets.x,
+        motor_offset_y  : (int16_t)mag_motor_offsets.y,
+        motor_offset_z  : (int16_t)mag_motor_offsets.z
+    };
+    DataFlash.WriteBlock(&pkt, sizeof(pkt));
+#if COMPASS_MAX_INSTANCES > 1
+    if (compass.get_count() > 1) {
+        const Vector3f &mag2_offsets = compass.get_offsets(1);
+        const Vector3f &mag2_motor_offsets = compass.get_motor_offsets(1);
+        const Vector3f &mag2 = compass.get_field(1);
+        struct log_Compass pkt2 = {
+            LOG_PACKET_HEADER_INIT(LOG_COMPASS2_MSG),
+            time_ms         : millis(),
+            mag_x           : (int16_t)mag2.x,
+            mag_y           : (int16_t)mag2.y,
+            mag_z           : (int16_t)mag2.z,
+            offset_x        : (int16_t)mag2_offsets.x,
+            offset_y        : (int16_t)mag2_offsets.y,
+            offset_z        : (int16_t)mag2_offsets.z,
+            motor_offset_x  : (int16_t)mag2_motor_offsets.x,
+            motor_offset_y  : (int16_t)mag2_motor_offsets.y,
+            motor_offset_z  : (int16_t)mag2_motor_offsets.z
+        };
+        DataFlash.WriteBlock(&pkt2, sizeof(pkt2));
+    }
+#endif
+#if COMPASS_MAX_INSTANCES > 2
+    if (compass.get_count() > 2) {
+        const Vector3f &mag3_offsets = compass.get_offsets(2);
+        const Vector3f &mag3_motor_offsets = compass.get_motor_offsets(2);
+        const Vector3f &mag3 = compass.get_field(2);
+        struct log_Compass pkt3 = {
+            LOG_PACKET_HEADER_INIT(LOG_COMPASS3_MSG),
+            time_ms         : millis(),
+            mag_x           : (int16_t)mag3.x,
+            mag_y           : (int16_t)mag3.y,
+            mag_z           : (int16_t)mag3.z,
+            offset_x        : (int16_t)mag3_offsets.x,
+            offset_y        : (int16_t)mag3_offsets.y,
+            offset_z        : (int16_t)mag3_offsets.z,
+            motor_offset_x  : (int16_t)mag3_motor_offsets.x,
+            motor_offset_y  : (int16_t)mag3_motor_offsets.y,
+            motor_offset_z  : (int16_t)mag3_motor_offsets.z
+        };
+        DataFlash.WriteBlock(&pkt3, sizeof(pkt3));
+    }
+#endif
+}
+...
+```
+In the same way as defined in previous functios here, a struct is defined: `log_Mode`,`Log_Sonar`... After the definition there is a function:`Log_Write_Mode()`, `Log_Write_Sonar`that writes a packet using corresponding defined struct.For example: In the `Log_Write_Compass`all compass data values are full-filled with the info from the packet `log_Compass`; for more infro you can go to  [AP_Compass](https://github.com/BeaglePilot/ardupilot/tree/master/libraries/AP_Compass) and see the meaning of the variables there.
+
+```cpp
+
+static void Log_Write_RC(void)
+{
+    DataFlash.Log_Write_RCIN();
+    DataFlash.Log_Write_RCOUT();
+}
+...
+```
+
+This funtion calls `Log_Write_RCIN`and `Log_Write_RCout`functions defined in DataFLash module. These two functions writes the RC Input/Output data on the datdflash.
+
+```cpp
+
+static void Log_Write_Baro(void)
+{
+    DataFlash.Log_Write_Baro(barometer);
+}
+
+...
+```
+ The same as the previus function, but with the barometer data.
+
+ ```cpp
+
+static const struct LogStructure log_structure[] PROGMEM = {
+    LOG_COMMON_STRUCTURES,
+    { LOG_ATTITUDE_MSG, sizeof(log_Attitude),
+      "ATT", "IccC",        "TimeMS,Roll,Pitch,Yaw" },
+    { LOG_PERFORMANCE_MSG, sizeof(log_Performance),
+      "PM",  "IIHIhhhBH", "TimeMS,LTime,MLC,gDt,GDx,GDy,GDz,I2CErr,INSErr" },
+    { LOG_STARTUP_MSG, sizeof(log_Startup),
+      "STRT", "IBH",        "TimeMS,SType,CTot" },
+    { LOG_CTUN_MSG, sizeof(log_Control_Tuning),
+      "CTUN", "Ihcchf",     "TimeMS,Steer,Roll,Pitch,ThrOut,AccY" },
+    { LOG_NTUN_MSG, sizeof(log_Nav_Tuning),
+      "NTUN", "IHfHHb",     "TimeMS,Yaw,WpDist,TargBrg,NavBrg,Thr" },
+    { LOG_SONAR_MSG, sizeof(log_Sonar),
+      "SONR", "IfHHHbHCb",  "TimeMS,LatAcc,S1Dist,S2Dist,DCnt,TAng,TTim,Spd,Thr" },
+    { LOG_CURRENT_MSG, sizeof(log_Current),
+      "CURR", "IhhhHf",     "TimeMS,Thr,Volt,Curr,Vcc,CurrTot" },
+    { LOG_MODE_MSG, sizeof(log_Mode),
+      "MODE", "IMB",        "TimeMS,Mode,ModeNum" },
+    { LOG_COMPASS_MSG, sizeof(log_Compass),
+      "MAG", "Ihhhhhhhhh",  "TimeMS,MagX,MagY,MagZ,OfsX,OfsY,OfsZ,MOfsX,MOfsY,MOfsZ" },
+    { LOG_COMPASS2_MSG, sizeof(log_Compass),
+      "MAG2", "Ihhhhhhhhh",   "TimeMS,MagX,MagY,MagZ,OfsX,OfsY,OfsZ,MOfsX,MOfsY,MOfsZ" },
+    { LOG_STEERING_MSG, sizeof(log_Steering),
+      "STER", "Iff",   "TimeMS,Demanded,Achieved" },
+};
+
+```
+Here you can find a struct defining arrays, which containg the `LOG_MSG`values for each class of log-message.
+
+```cpp
+// Read the DataFlash log memory : Packet Parser
+static void Log_Read(uint16_t log_num, uint16_t start_page, uint16_t end_page)
+{
+    cliSerial->printf_P(PSTR("\n" FIRMWARE_STRING
+                             "\nFree RAM: %u\n"),
+                        (unsigned)hal.util->available_memory());
+
+    cliSerial->println_P(PSTR(HAL_BOARD_NAME));
+
+	DataFlash.LogReadProcess(log_num, start_page, end_page,
+                             print_mode,
+                             cliSerial);
+}
+...
+```
+Here there is the implemtation of the function that reads logs from the datdflash memory.
+
+```cpp
+// start a new log
+static void start_logging()
+{
+    in_mavlink_delay = true;
+    DataFlash.StartNewLog();
+    in_mavlink_delay = false;
+    DataFlash.Log_Write_Message_P(PSTR(FIRMWARE_STRING));
+
+#if defined(PX4_GIT_VERSION) && defined(NUTTX_GIT_VERSION)
+    DataFlash.Log_Write_Message_P(PSTR("PX4: " PX4_GIT_VERSION " NuttX: " NUTTX_GIT_VERSION));
+#endif
+
+    // write system identifier as well if available
+    char sysid[40];
+    if (hal.util->get_system_id(sysid)) {
+        DataFlash.Log_Write_Message(sysid);
+    }
+}
+
+#else // LOGGING_ENABLED
+
+...
+```
+This funtion starts a new log. Open a new log in dataflash with `StartNewLog` and then writes the log message using `Log_Write_Message`.If PX4 and NUYYX are available then writes the version. Finally, also write the id from the system.
+```cpp
+// dummy functions
+static void Log_Write_Startup(uint8_t type) {}
+static void Log_Write_Current() {}
+static void Log_Write_Nav_Tuning() {}
+static void Log_Write_Performance() {}
+static void Log_Write_Cmd(const AP_Mission::Mission_Command &cmd) {}
+static int8_t process_logs(uint8_t argc, const Menu::arg *argv) { return 0; }
+static void Log_Write_Control_Tuning() {}
+static void Log_Write_Sonar() {}
+static void Log_Write_Mode() {}
+static void Log_Write_Attitude() {}
+static void Log_Write_Compass() {}
+static void start_logging() {}
+static void Log_Write_RC(void) {}
+
+#endif // LOGGING_ENABLED
+...
+```
+This sliece of code containd definitios for the `Log_Write`functions implemented above.
