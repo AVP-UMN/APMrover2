@@ -1,6 +1,5 @@
-# Other files
 
-####Makefile
+#Makefile
 
 Here you can find the link to the code: [Makefile](https://github.com/BeaglePilot/ardupilot/blob/master/APMrover2/Makefile).
 

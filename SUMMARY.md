@@ -6,9 +6,9 @@
    * [GCS_Mavlink.pde](apmrover2/gcs_mavlinkpde.md)
    * [Config.h](apmrover2/configh.md)
    * [Log.pde](apmrover2/logpde.md)
+   * [Makefile](apmrover2/other_files.md)
    * [Parameters](apmrover2/parameters.md)
        * [Parameters.h](apmrover2/parametersh.md)
        * [Parameters.pde](apmrover2/parameterspde.md)
    * [Steering.pde](apmrover2/steeringpde.md)
-   * [Other files](apmrover2/other_files.md)
 
