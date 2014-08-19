@@ -12,4 +12,5 @@
        * [Parameters.pde](apmrover2/parameterspde.md)
    * [Steering.pde](apmrover2/steeringpde.md)
    * [Commands](apmrover2/commands.md)
+       * [commands.pde](apmrover2/commandspde.md)
 
