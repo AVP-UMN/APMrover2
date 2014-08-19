@@ -99,7 +99,7 @@ void init_home()
 }
 ...
 ```
-The following function is `init_home` this function checks if `have_position`variable contains the position.Then sets the "home point" as the current `gps.location()`.Then the home is stored in the memory and the `next_WP` and `prev_WP` are updated to home value. Then `guided_WP`is updated to home.
+The following function is `init_home`, this function checks if `have_position`variable contains the position.Then sets the "home point" as the current `gps.location()`.Then the home is stored in the memory and the `next_WP` and `prev_WP` are updated to home value. Then `guided_WP`is updated to home.
 ```cpp
 static void restart_nav()
 {

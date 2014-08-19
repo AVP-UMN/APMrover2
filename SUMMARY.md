@@ -14,4 +14,5 @@
    * [Commands](apmrover2/commands.md)
        * [commands.pde](apmrover2/commandspde.md)
        * [commands_logic.pde](apmrover2/commands_logicpde.md)
+       * [commands_process.pde](apmrover2/commands_processpde.md)
 
