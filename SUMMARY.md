@@ -15,4 +15,6 @@
        * [commands.pde](apmrover2/commandspde.md)
        * [commands_logic.pde](apmrover2/commands_logicpde.md)
        * [commands_process.pde](apmrover2/commands_processpde.md)
+   * [Compat.h /compat.pde](apmrover2/compath_compatpde.md)
+   * [control_modes.pde](apmrover2/control_modespde.md)
 
