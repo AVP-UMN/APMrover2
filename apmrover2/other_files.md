@@ -1,29 +1,15 @@
+# Other files
 
-#Makefile
+In the APMrover2 repository you can find two more files, that we haven't commented yet:
 
-Here you can find the link to the code: [Makefile](https://github.com/BeaglePilot/ardupilot/blob/master/APMrover2/Makefile).
+######CreateFlags
 
----
+Link to the code: [CreateFlags](https://github.com/BeaglePilot/ardupilot/blob/master/APMrover2/createTags).
 
-######Makefile and make utility
+A **flag word** can refer to one or more bits that are used to store a binary value or code that has an assigned meaning, but can refer to uses of other data types.These file includes Flags for, between others,  syntax highligthing, arduino syntax...
 
-Makefiles are special format files that together with the make utility will help you to automatically build and manage your projects.
+#####nocore.inoflog
 
-If you run on your terminal window:
-```
-make
-```
-this utility will look for a file named "makefile" in your directory, and then execute it.
-If you have several makefiles, then you can execute them with the command:
-```
-make -f MyMakefile
-```
-For more info type: `man make`.
+Link to the code: [nocore.inoflog](https://github.com/BeaglePilot/ardupilot/blob/master/APMrover2/nocore.inoflag)
 
----
-
-The Makefile includes the `apm.k`:
-```
-include ../mk/apm.mk
-```
-and let you build the ardurover.
+These file does nothing for now.

@@ -17,4 +17,6 @@
        * [commands_process.pde](apmrover2/commands_processpde.md)
    * [Compat.h /compat.pde](apmrover2/compath_compatpde.md)
    * [control_modes.pde](apmrover2/control_modespde.md)
+   * [defines.h](apmrover2/definesh.md)
+   * [Other files](apmrover2/other_files.md)
 
