@@ -18,5 +18,6 @@
    * [Compat.h /compat.pde](apmrover2/compath_compatpde.md)
    * [control_modes.pde](apmrover2/control_modespde.md)
    * [defines.h](apmrover2/definesh.md)
+   * [events.pde](apmrover2/eventspde.md)
    * [Other files](apmrover2/other_files.md)
 

@@ -98,7 +98,7 @@ case MAV_CMD_DO_SET_SERVO:
             break;
 ...
 ```
-This options of the case follow the same structure, but the funtions implemented are related to `ServoRelayEvents`.
+This options of the case follow the same structure, but the funtions implemented are related to [AP_ServoRelayEvents](https://github.com/diydrones/ardupilot/blob/master/libraries/AP_ServoRelayEvents/AP_ServoRelayEvents.h#L33).
 
 ```cpp
 #if CAMERA == ENABLED
