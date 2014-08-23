@@ -24,4 +24,5 @@
    * [radio.pde](apmrover2/radiopde.md)
    * [sensors.pde](apmrover2/sensorspde.md)
    * [Other files](apmrover2/other_files.md)
+   * [setup.pde](apmrover2/setuppde.md)
 
