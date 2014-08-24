@@ -387,4 +387,143 @@ Also the channel steer trim is stablished to 1500.
 All the changes are updated and saved.
 
 ```cpp
-https://github.com/diydrones/ardupilot/blob/master/APMrover2/setup.pde#L298
+static int8_t
+setup_flightmodes(uint8_t argc, const Menu::arg *argv)
+{
+...
+```
+This functions sets the posible control modes, when driving.
+
+```cpp
+	uint8_t switchPosition, mode = 0;
+
+	cliSerial->printf_P(PSTR("\nMove RC toggle switch to each position to edit, move aileron stick to select modes."));
+	print_hit_enter();
+	trim_radio();
+
+	while(1){
+		delay(20);
+		read_radio();
+		switchPosition = readSwitch();
+...
+```
+This slice of code reads the position of the switch, for the input mode.
+
+```cpp
+		// look for control switch change
+		if (oldSwitchPosition != switchPosition){
+			// force position 5 to MANUAL
+			if (switchPosition > 4) {
+				modes[switchPosition] = MANUAL;
+			}
+			// update our current mode
+			mode = modes[switchPosition];
+
+			// update the user
+			print_switch(switchPosition, mode);
+
+			// Remember switch position
+			oldSwitchPosition = switchPosition;
+		}
+	...
+	```
+	Checks for a new switch position and updated the control mode.
+
+```cpp
+
+		// look for stick input
+		int radioInputSwitch = radio_input_switch();
+
+		if (radioInputSwitch != 0){
+
+			mode += radioInputSwitch;
+
+			while (
+				mode != MANUAL &&
+				mode != HOLD &&
+				mode != LEARNING &&
+				mode != STEERING &&
+				mode != AUTO &&
+				mode != RTL)
+			{
+				if (mode < MANUAL)
+					mode = RTL;
+				else if (mode > RTL)
+					mode = MANUAL;
+				else
+					mode += radioInputSwitch;
+			}
+	...
+	```
+	After reading the radio input the mode is changed.
+
+
+```cpp
+			// Override position 5
+			if(switchPosition > 4)
+				mode = MANUAL;
+
+			// save new mode
+			modes[switchPosition] = mode;
+
+			// print new mode
+			print_switch(switchPosition, mode);
+		}
+...
+```
+The new mode is saved and printed for the user to know it.
+```cpp
+
+		// escape hatch
+		if(cliSerial->available() > 0){
+		    // save changes
+            for (mode=0; mode<6; mode++)
+                modes[mode].save();
+			report_modes();
+			print_done();
+			return (0);
+		}
+	}
+}
+...
+```
+
+This slice of code is for getting out of the mode selection.
+
+```cpp
+
+static int8_t
+setup_declination(uint8_t argc, const Menu::arg *argv)
+{
+	compass.set_declination(radians(argv[1].f));
+	report_compass();
+    return 0;
+}
+...
+```
+The `setup_declination`funtion reports the compass data.
+
+```cpp
+
+static int8_t
+setup_erase(uint8_t argc, const Menu::arg *argv)
+{
+	int			c;
+
+	cliSerial->printf_P(PSTR("\nType 'Y' and hit Enter to erase all waypoint and parameter data, any other key to abort: "));
+
+	do {
+		c = cliSerial->read();
+	} while (-1 == c);
+
+	if (('y' != c) && ('Y' != c))
+		return(-1);
+	zero_eeprom();
+	return 0;
+}
+...
+```
+
+This slice of code implements the `setup_erase`function. This function erase the EEPROM memory where the wp and parameters are stored.
+
+https://github.com/diydrones/ardupilot/blob/master/APMrover2/setup.pde#L401
