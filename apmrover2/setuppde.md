@@ -526,4 +526,30 @@ setup_erase(uint8_t argc, const Menu::arg *argv)
 
 This slice of code implements the `setup_erase`function. This function erase the EEPROM memory where the wp and parameters are stored.
 
-https://github.com/diydrones/ardupilot/blob/master/APMrover2/setup.pde#L401
+```cpp
+/*
+  handle full accelerometer calibration via user dialog
+ */
+#if !defined( __AVR_ATmega1280__ )
+static int8_t
+setup_accel_scale(uint8_t argc, const Menu::arg *argv)
+{
+    float trim_roll, trim_pitch;
+    cliSerial->println_P(PSTR("Initialising gyros"));
+    ahrs.init();
+    ins.init(AP_InertialSensor::COLD_START,
+             ins_sample_rate);
+    AP_InertialSensor_UserInteractStream interact(hal.console);
+    if(ins.calibrate_accel(&interact, trim_roll, trim_pitch)) {
+        // reset ahrs's trim to suggested values from calibration routine
+        ahrs.set_trim(Vector3f(trim_roll, trim_pitch, 0));
+    }
+    return(0);
+}
+#endif
+...
+```
+
+This function checks if the AVR_ATmega1280 is defined and after that calls [AP_InertialSensor](https://github.com/BeaglePilot/ardupilot/tree/master/libraries/AP_InertialSensor) functions for calibrating the acceleration.
+
+https://github.com/diydrones/ardupilot/blob/master/APMrover2/setup.pde#L422
