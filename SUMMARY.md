@@ -23,6 +23,7 @@
    * [failsafe.pde](apmrover2/failsafepde.md)
    * [radio.pde](apmrover2/radiopde.md)
    * [sensors.pde](apmrover2/sensorspde.md)
-   * [Other files](apmrover2/other_files.md)
    * [setup.pde](apmrover2/setuppde.md)
+   * [Other files](apmrover2/other_files.md)
+   * [System.pde](apmrover2/systempde.md)
 
