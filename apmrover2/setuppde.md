@@ -552,4 +552,333 @@ setup_accel_scale(uint8_t argc, const Menu::arg *argv)
 
 This function checks if the AVR_ATmega1280 is defined and after that calls [AP_InertialSensor](https://github.com/BeaglePilot/ardupilot/tree/master/libraries/AP_InertialSensor) functions for calibrating the acceleration.
 
-https://github.com/diydrones/ardupilot/blob/master/APMrover2/setup.pde#L422
+```cpp
+static int8_t
+setup_level(uint8_t argc, const Menu::arg *argv)
+{
+    cliSerial->println_P(PSTR("Initialising gyros"));
+    ahrs.init();
+    ins.init(AP_InertialSensor::COLD_START,
+             ins_sample_rate);
+    ins.init_accel();
+    ahrs.set_trim(Vector3f(0, 0, 0));
+    return(0);
+}
+
+static int8_t
+...
+```
+
+The `setup_level` function initialize the accelerometer ans set some AHRS functions.
+
+```cpp
+setup_compass(uint8_t argc, const Menu::arg *argv)
+{
+	if (!strcmp_P(argv[1].str, PSTR("on"))) {
+		if (!compass.init()) {
+            cliSerial->println_P(PSTR("Compass initialisation failed!"));
+            g.compass_enabled = false;
+        } else {
+            g.compass_enabled = true;
+        }
+	} else if (!strcmp_P(argv[1].str, PSTR("off"))) {
+		g.compass_enabled = false;
+
+	} else if (!strcmp_P(argv[1].str, PSTR("reset"))) {
+		compass.set_and_save_offsets(0,0,0,0);
+
+	} else {
+		cliSerial->printf_P(PSTR("\nOptions:[on,off,reset]\n"));
+		report_compass();
+		return 0;
+	}
+
+	g.compass_enabled.save();
+	report_compass();
+	return 0;
+}
+...
+```
+Enables de compass data and reports the status.
+
+```cpp
+/***************************************************************************/
+// CLI reports
+/***************************************************************************/
+
+static void report_batt_monitor()
+{
+    //print_blanks(2);
+    cliSerial->printf_P(PSTR("Batt Mointor\n"));
+    print_divider();
+    if(battery.monitoring() == AP_BATT_MONITOR_DISABLED) cliSerial->printf_P(PSTR("Batt monitoring disabled"));
+    if(battery.monitoring() == AP_BATT_MONITOR_VOLTAGE_ONLY) cliSerial->printf_P(PSTR("Monitoring batt volts"));
+    if(battery.monitoring() == AP_BATT_MONITOR_VOLTAGE_AND_CURRENT) cliSerial->printf_P(PSTR("Monitoring volts and current"));
+    print_blanks(2);
+}
+...
+```
+Remember that the **cliSerial is an alias for hal.console **. This function prints some values related to the battery, if the `battery.monitoring()`is enabled.
+
+```cpp
+static void report_radio()
+{
+	//print_blanks(2);
+	cliSerial->printf_P(PSTR("Radio\n"));
+	print_divider();
+	// radio
+	print_radio_values();
+	print_blanks(2);
+}
+
+...
+```
+This function print the radio channel values using [RC_Channel](https://github.com/diydrones/ardupilot/blob/master/libraries/RC_Channel/RC_Channel.cpp) function.
+```cpp
+
+static void report_gains()
+{
+	//print_blanks(2);
+	cliSerial->printf_P(PSTR("Gains\n"));
+	print_divider();
+
+	cliSerial->printf_P(PSTR("speed throttle:\n"));
+	print_PID(&g.pidSpeedThrottle);
+
+	print_blanks(2);
+}
+...
+```
+In the same way as `report_radio()`,above, this function prints the `pidSpeedThrottle`for monitorizing the throttle speed status.
+
+```cpp
+static void report_throttle()
+{
+	//print_blanks(2);
+	cliSerial->printf_P(PSTR("Throttle\n"));
+	print_divider();
+
+	cliSerial->printf_P(PSTR("min: %u\n"
+                             "max: %u\n"
+                             "cruise: %u\n"
+                             "failsafe_enabled: %u\n"
+                             "failsafe_value: %u\n"),
+						 (unsigned)g.throttle_min,
+						 (unsigned)g.throttle_max,
+						 (unsigned)g.throttle_cruise,
+						 (unsigned)g.fs_throttle_enabled,
+						 (unsigned)g.fs_throttle_value);
+	print_blanks(2);
+}
+...
+```
+
+This function prints some values related to the throttle: the max and min values, the cruise speed...
+```cpp
+static void report_compass()
+{
+	//print_blanks(2);
+	cliSerial->printf_P(PSTR("Compass: "));
+
+    switch (compass.product_id) {
+    case AP_COMPASS_TYPE_HMC5883L:
+        cliSerial->println_P(PSTR("HMC5883L"));
+        break;
+    case AP_COMPASS_TYPE_HMC5843:
+        cliSerial->println_P(PSTR("HMC5843"));
+        break;
+    case AP_COMPASS_TYPE_HIL:
+        cliSerial->println_P(PSTR("HIL"));
+        break;
+    default:
+        cliSerial->println_P(PSTR("??"));
+        break;
+    }
+    ...
+    ```
+    This functions printthe status of compass data. First it enters a case for selecting the compass type and notifiying it.
+    ```cpp
+
+	print_divider();
+
+	print_enabled(g.compass_enabled);
+
+	// mag declination
+	cliSerial->printf_P(PSTR("Mag Declination: %4.4f\n"),
+							degrees(compass.get_declination()));
+
+	Vector3f offsets = compass.get_offsets();
+
+	// mag offsets
+	cliSerial->printf_P(PSTR("Mag offsets: %4.4f, %4.4f, %4.4f\n"),
+							offsets.x,
+							offsets.y,
+							offsets.z);
+	print_blanks(2);
+}
+
+...
+```
+Then prints some values related to the compass data like the x,y,z offsets.
+
+```cpp
+
+static void report_modes()
+{
+	//print_blanks(2);
+	cliSerial->printf_P(PSTR("Flight modes\n"));
+	print_divider();
+
+	for(int i = 0; i < 6; i++ ){
+		print_switch(i, modes[i]);
+	}
+	print_blanks(2);
+}
+...
+```
+This funtion prints the switch position for selecting the mode.
+
+```cpp
+/***************************************************************************/
+// CLI utilities
+/***************************************************************************/
+
+static void
+print_PID(PID * pid)
+{
+	cliSerial->printf_P(PSTR("P: %4.3f, I:%4.3f, D:%4.3f, IMAX:%ld\n"),
+					pid->kP(),
+					pid->kI(),
+					pid->kD(),
+					(long)pid->imax());
+}
+...
+```
+
+This funtion prints the values of the constants related to the PID controller. [Here](http://en.wikipedia.org/wiki/PID_controller) you can find the government ecuation where kd, ki,kp appear.
+
+```cpp
+static void
+print_radio_values()
+{
+	cliSerial->printf_P(PSTR("CH1: %d | %d | %d\n"), (int)channel_steer->radio_min, (int)channel_steer->radio_trim, (int)channel_steer->radio_max);
+	cliSerial->printf_P(PSTR("CH2: %d | %d | %d\n"), (int)g.rc_2.radio_min, (int)g.rc_2.radio_trim, (int)g.rc_2.radio_max);
+	cliSerial->printf_P(PSTR("CH3: %d | %d | %d\n"), (int)channel_throttle->radio_min, (int)channel_throttle->radio_trim, (int)channel_throttle->radio_max);
+	cliSerial->printf_P(PSTR("CH4: %d | %d | %d\n"), (int)g.rc_4.radio_min, (int)g.rc_4.radio_trim, (int)g.rc_4.radio_max);
+	cliSerial->printf_P(PSTR("CH5: %d | %d | %d\n"), (int)g.rc_5.radio_min, (int)g.rc_5.radio_trim, (int)g.rc_5.radio_max);
+	cliSerial->printf_P(PSTR("CH6: %d | %d | %d\n"), (int)g.rc_6.radio_min, (int)g.rc_6.radio_trim, (int)g.rc_6.radio_max);
+	cliSerial->printf_P(PSTR("CH7: %d | %d | %d\n"), (int)g.rc_7.radio_min, (int)g.rc_7.radio_trim, (int)g.rc_7.radio_max);
+	cliSerial->printf_P(PSTR("CH8: %d | %d | %d\n"), (int)g.rc_8.radio_min, (int)g.rc_8.radio_trim, (int)g.rc_8.radio_max);
+
+}
+...
+```
+This slice of code prints the values from the `channel_steer`and the `channel_throttle`.
+
+```cpp
+static void
+print_switch(uint8_t p, uint8_t m)
+{
+	cliSerial->printf_P(PSTR("Pos %d: "),p);
+    print_mode(cliSerial, m);
+    cliSerial->println();
+}
+
+...
+```
+
+This prints the mode -switch status.
+
+```cpp
+static void
+print_done()
+{
+	cliSerial->printf_P(PSTR("\nSaved Settings\n\n"));
+}
+...
+```
+Prints a "save and done" message.
+
+```cpp
+static void
+print_blanks(int num)
+{
+	while(num > 0){
+		num--;
+		cliSerial->println("");
+	}
+}
+...
+```
+Prints some white lines, for making it easy to read.
+```cpp
+static void
+print_divider(void)
+{
+	for (int i = 0; i < 40; i++) {
+		cliSerial->printf_P(PSTR("-"));
+	}
+	cliSerial->println("");
+}
+...
+```
+
+This slice of code prints 40  "-" signs for separate code.
+
+```cpp
+
+static int8_t
+radio_input_switch(void)
+{
+	static int8_t bouncer = 0;
+
+
+	if (int16_t(channel_steer->radio_in - channel_steer->radio_trim) > 100) {
+	    bouncer = 10;
+	}
+	if (int16_t(channel_steer->radio_in - channel_steer->radio_trim) < -100) {
+	    bouncer = -10;
+	}
+	if (bouncer >0) {
+	    bouncer --;
+	}
+	if (bouncer <0) {
+	    bouncer ++;
+	}
+
+	if (bouncer == 1 || bouncer == -1) {
+	    return bouncer;
+	} else {
+	    return 0;
+	}
+}
+
+...
+```
+This slice of code takes care of the radio input switch position.
+
+```cpp
+static void zero_eeprom(void)
+{
+	cliSerial->printf_P(PSTR("\nErasing EEPROM\n"));
+    StorageManager::erase();
+	cliSerial->printf_P(PSTR("done\n"));
+}
+...
+```
+This slice of code erase data from the EEPROM memory .
+
+```cpp
+
+static void print_enabled(bool b)
+{
+	if(b)
+		cliSerial->printf_P(PSTR("en"));
+	else
+		cliSerial->printf_P(PSTR("dis"));
+	cliSerial->printf_P(PSTR("abled\n"));
+}
+
+#endif // CLI_ENABLED
+```
+This slice of code checks if the printing options are enabled.
