@@ -25,5 +25,6 @@
    * [sensors.pde](apmrover2/sensorspde.md)
    * [System.pde](apmrover2/systempde.md)
    * [setup.pde](apmrover2/setuppde.md)
+   * [test.pde](apmrover2/testpde.md)
    * [Other files](apmrover2/other_files.md)
 
